@@ -18,60 +18,86 @@ import {
 import { clearCart } from "../Feature/CartSlice";
 import districtData from "../DistrictData/DistrictData";
 
-const API_URL = "https://sprienge-backend.onrender.com/api";
+const API_URL = "https://ourbackend.spriengge.shop/api";
 
 /* =========================================================
    NORMALIZE CART ITEM
 ========================================================= */
 
-const normalizeItem = (item, quantityOverride = null) => {
-  const price = Number(item?.price);
+const normalizeItem = (item, forcedQuantity = null) => {
+  if (!item) return null;
 
-  const quantity = Math.max(
-    1,
-    Number(quantityOverride ?? item?.quantity) || 1
-  );
+  const productId =
+    item?.productId ??
+    item?.id ??
+    item?._id ??
+    null;
 
-  const safePrice = Number.isFinite(price) ? price : 0;
+  const variantId =
+    item?.variantId ??
+    item?.selectedVariant?.variantId ??
+    item?.selectedVariant?.id ??
+    item?.selectedVariant?._id ??
+    null;
+
+  const quantity =
+    forcedQuantity !== null
+      ? Math.max(1, Number(forcedQuantity) || 1)
+      : Math.max(
+          1,
+          Number(item?.quantity ?? item?.qty ?? 1) || 1
+        );
 
   return {
-    productId: item?.productId ?? item?.id ?? null,
+    productId,
 
-    productName: item?.productName ?? item?.name ?? "",
+    productName:
+      item?.productName ||
+      item?.name ||
+      item?.title ||
+      "Product",
 
     productImage:
-      item?.productImage ??
-      item?.image ??
+      item?.productImage ||
+      item?.image ||
+      item?.images?.[0] ||
       "",
 
-    /* Variant Information */
-
-    variantId: item?.variantId ?? null,
+    variantId,
 
     selectedColor:
-      item?.selectedColor ??
-      item?.color ??
+      item?.selectedColor ||
+      item?.color ||
       null,
 
     selectedColorCode:
-      item?.selectedColorCode ??
-      item?.colorCode ??
+      item?.selectedColorCode ||
+      item?.colorCode ||
       null,
 
     selectedSize:
-      item?.selectedSize ??
-      item?.size ??
+      item?.selectedSize ||
+      item?.size ||
       null,
 
-    /* Price */
+    price: Number(
+  item?.price ??
+  item?.unitPrice ??
+  0
+),
 
-    price: safePrice,
+quantity,
 
-    quantity,
-
-    subtotal: safePrice * quantity,
+subtotal:
+  Number(
+    item?.price ??
+    item?.unitPrice ??
+    0
+  ) * quantity,
   };
 };
+
+  
 
 /* =========================================================
    CHECKOUT
@@ -91,6 +117,13 @@ const Checkout = () => {
   const isBuyNow = Boolean(state.product);
 
   const product = state.product || null;
+
+  const checkoutProductId =
+  state?.productId ??
+  product?.productId ??
+  product?.id ??
+  product?._id ??
+  null;
 
   const buyNowQuantity = Math.max(
     1,
@@ -124,20 +157,30 @@ const Checkout = () => {
      ORDER ITEMS
   ========================================================= */
 
-  const [orderItems, setOrderItems] = useState(() => {
-    if (isBuyNow && product) {
-      return [
-        normalizeItem(
-          product,
-          buyNowQuantity
-        ),
-      ];
-    }
-
-    return cartItems.map((item) =>
-      normalizeItem(item)
+const [orderItems, setOrderItems] = useState(() => {
+  if (isBuyNow && product) {
+    const normalizedProduct = normalizeItem(
+      {
+        ...product,
+        productId:
+          checkoutProductId ??
+          product?.productId ??
+          product?.id ??
+          product?._id ??
+          null,
+      },
+      buyNowQuantity
     );
-  });
+
+    return normalizedProduct
+      ? [normalizedProduct]
+      : [];
+  }
+
+  return cartItems
+    .map((item) => normalizeItem(item))
+    .filter(Boolean);
+});
 
   /* =========================================================
      INCREASE QUANTITY
@@ -418,419 +461,105 @@ const Checkout = () => {
   ========================================================= */
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    if (loading) {
-      return;
-    }
-
-    /* CUSTOMER DATA */
-
-    const name =
-      formData.name.trim();
-
-    const phone =
-      formData.phone.trim();
-
-    const district =
-      formData.district.trim();
-
-    const thana =
-      formData.thana.trim();
-
-    const address =
-      formData.address.trim();
-
-    const note =
-      formData.note.trim();
-
-    /* =======================================================
-       NAME
-    ======================================================= */
-
-    if (!name) {
-      alert(
-        "Please enter your name."
-      );
-
-      return;
-    }
-
-    if (name.length < 2) {
-      alert(
-        "Please enter a valid name."
-      );
-
-      return;
-    }
-
-    /* =======================================================
-       PHONE
-    ======================================================= */
-
-    if (!phone) {
-      alert(
-        "Please enter your phone number."
-      );
-
-      return;
-    }
-
-    if (!/^01\d{9}$/.test(phone)) {
-      alert(
-        "Please enter a valid Bangladesh phone number.\n\nExample: 01712345678"
-      );
-
-      return;
-    }
-
-    /* =======================================================
-       DISTRICT
-    ======================================================= */
-
-    if (!district) {
-      alert(
-        "Please select your district."
-      );
-
-      return;
-    }
-
-    /* =======================================================
-       THANA
-    ======================================================= */
-
-    if (!thana) {
-      alert(
-        "Please select your thana."
-      );
-
-      return;
-    }
-
-    /* =======================================================
-       ADDRESS
-    ======================================================= */
-
-    if (!address) {
-      alert(
-        "Please enter your delivery address."
-      );
-
-      return;
-    }
-
-    if (address.length < 5) {
-      alert(
-        "Please enter a more complete delivery address."
-      );
-
-      return;
-    }
-
-    /* =======================================================
-       ITEMS
-    ======================================================= */
-
-    const itemError =
-      validateItems();
-
-    if (itemError) {
-      alert(itemError);
-
-      return;
-    }
-
-    /* =======================================================
-       FINAL ITEMS
-    ======================================================= */
-
-    const finalItems =
-      orderItems.map((item) => ({
-        productId:
-          item.productId,
-
-        productName:
-          item.productName,
-
-        productImage:
-          item.productImage,
-
-        /* Variant */
-
-        variantId:
-          item.variantId,
-
-        selectedColor:
-          item.selectedColor,
-
-        selectedColorCode:
-          item.selectedColorCode,
-
-        selectedSize:
-          item.selectedSize,
-
-        /* Price */
-
-        price:
-          Number(item.price),
-
-        quantity:
-          Number(item.quantity),
-
-        subtotal:
-          Number(item.price) *
-          Number(item.quantity),
-      }));
-
-    /* =======================================================
-       FIRST ITEM
-    ======================================================= */
-
-    const firstItem =
-      finalItems[0];
-
-    /* =======================================================
-       ORDER DATA
-    ======================================================= */
-
-    const orderData = {
-      /* CUSTOMER */
-
-      name,
-
-      phone,
-
-      district,
-
-      thana,
-
-      address,
-
-      note,
-
-      /* =====================================================
-         ORDER TYPE
-      ===================================================== */
-
-      orderType:
-        isBuyNow
-          ? "buy_now"
-          : "cart",
-
-      /* =====================================================
-         TOP LEVEL PRODUCT
-
-         Kept for backend/admin compatibility
-      ===================================================== */
-
-      productId:
-        isBuyNow
-          ? firstItem.productId
-          : null,
-
-      productName:
-        isBuyNow
-          ? firstItem.productName
-          : "",
-
-      productImage:
-        isBuyNow
-          ? firstItem.productImage
-          : "",
-
-      variantId:
-        isBuyNow
-          ? firstItem.variantId
-          : null,
-
-      selectedColor:
-        isBuyNow
-          ? firstItem.selectedColor
-          : null,
-
-      selectedColorCode:
-        isBuyNow
-          ? firstItem.selectedColorCode
-          : null,
-
-      selectedSize:
-        isBuyNow
-          ? firstItem.selectedSize
-          : null,
-
-      price:
-        isBuyNow
-          ? firstItem.price
-          : 0,
-
-      quantity:
-        isBuyNow
-          ? firstItem.quantity
-          : 1,
-
-      /* =====================================================
-         ITEMS
-      ===================================================== */
-
-      items: finalItems,
-
-      /* =====================================================
-         MONEY
-      ===================================================== */
-
-      subtotal:
-
-        Number(subtotal),
-
-      deliveryCharge:
-
-        Number(deliveryCharge),
-
-      total:
-
-        Number(total),
-
-      /* =====================================================
-         PAYMENT
-      ===================================================== */
-
-      paymentMethod:
-        "cash_on_delivery",
-
-      paymentStatus:
-        "pending",
-
-      /* =====================================================
-         ORDER INFO
-      ===================================================== */
-
-      source:
-        "website",
-
-      orderSource:
-        "website",
-    };
-
-    console.log(
-      "ORDER DATA:",
-      orderData
-    );
-
-    /* =======================================================
-       START LOADING
-    ======================================================= */
-
-    setLoading(true);
-
-    try {
-      const response =
-        await fetch(
-          `${API_URL}/orders`,
-          {
-            method: "POST",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-
-              Accept:
-                "application/json",
-            },
-
-            body:
-              JSON.stringify(
-                orderData
-              ),
-          }
-        );
-
-      /* =====================================================
-         RESPONSE
-      ===================================================== */
-
-      const responseText =
-        await response.text();
-
-      let data = {};
-
-      try {
-        data = responseText
-          ? JSON.parse(
-              responseText
-            )
-          : {};
-      } catch (jsonError) {
-        console.error(
-          "JSON PARSE ERROR:",
-          jsonError
-        );
-      }
-
-      console.log(
-        "ORDER RESPONSE:",
-        data
-      );
-
-      /* =====================================================
-         BACKEND ERROR
-      ===================================================== */
-
-      if (!response.ok) {
-        const backendMessage =
-          data?.message ||
-          data?.error ||
-          responseText ||
-          `HTTP ${response.status}`;
-
-        throw new Error(
-          backendMessage
-        );
-      }
-
-      /* =====================================================
-         SUCCESS
-      ===================================================== */
-
-      alert(
-        "Order placed successfully! 🎉"
-      );
-
-      /* =====================================================
-         CLEAR CART
-
-         Only cart checkout clears Redux cart.
-      ===================================================== */
-
-      if (!isBuyNow) {
-        dispatch(
-          clearCart()
-        );
-      }
-
-      /* =====================================================
-         HOME
-      ===================================================== */
-
-      navigate("/");
-
-    } catch (error) {
-      console.error(
-        "ORDER ERROR:",
-        error
-      );
-
-      alert(
-        `Order failed!\n\n${
-          error?.message ||
-          "Please try again."
-        }`
-      );
-
-    } finally {
-      setLoading(false);
-    }
+  e.preventDefault();
+  if (loading) return;
+
+  // Validation...
+  const name = formData.name.trim();
+  const phone = formData.phone.trim();
+  const district = formData.district.trim();
+  const thana = formData.thana.trim();
+  const address = formData.address.trim();
+  const note = formData.note.trim();
+
+  if (!name || name.length < 2) return alert("Please enter a valid full name.");
+  if (!phone || !/^01\d{9}$/.test(phone)) return alert("Please enter a valid Bangladesh phone number.");
+  if (!district) return alert("Please select your district.");
+  if (!thana) return alert("Please select your thana.");
+  if (!address || address.length < 5) return alert("Please enter a complete delivery address.");
+
+  const itemError = validateItems();
+  if (itemError) return alert(itemError);
+
+  const finalItems = orderItems.map((item) => ({
+    productId: item.productId,
+    productName: item.productName,
+    productImage: item.productImage,
+    variantId: item.variantId,
+    selectedColor: item.selectedColor,
+    selectedColorCode: item.selectedColorCode,
+    selectedSize: item.selectedSize,
+    price: Number(item.price),
+    quantity: Number(item.quantity),
+    subtotal: Number(item.price) * Number(item.quantity),
+  }));
+
+  const firstItem = finalItems[0];
+
+  // 🛠️ FIX: Schema Compatibility Payload
+  const orderData = {
+    name,
+    phone,
+    district,
+    thana,
+    address,
+    note,
+    orderType: isBuyNow ? "buy_now" : "cart",
+    
+    // রুট লেভেলে সর্বদা প্রথম প্রোডাক্টের তথ্য পাঠানো (যদি ব্যাকএন্ড সিঙ্গেল প্রোডাক্ট সাপোর্ট করে)
+    productId: firstItem.productId,
+    productName: firstItem.productName,
+    productImage: firstItem.productImage,
+    variantId: firstItem.variantId,
+    selectedColor: firstItem.selectedColor,
+    selectedColorCode: firstItem.selectedColorCode,
+    selectedSize: firstItem.selectedSize,
+    price: Number(firstItem.price),
+    quantity: Number(firstItem.quantity),
+
+    // অ্যারে হিসেবে সব আইটেম পাঠানো
+    items: finalItems,
+    
+    subtotal: Number(subtotal),
+    deliveryCharge: Number(deliveryCharge),
+    total: Number(total),
+    paymentMethod: "cash_on_delivery",
+    paymentStatus: "pending",
+    source: "website",
+    orderSource: "website",
   };
+
+  // 🔍 Check your console before submitting
+  console.log("Submitting Payload:", orderData);
+
+  setLoading(true);
+
+  try {
+    const response = await fetch(`${API_URL}/orders`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(orderData),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data?.message || "Order placement failed.");
+    }
+
+    alert("Order placed successfully! 🎉");
+    if (!isBuyNow) dispatch(clearCart());
+    navigate("/");
+  } catch (error) {
+    console.error("ORDER ERROR:", error);
+    alert(`Order failed!\n\n${error?.message || "Please try again."}`);
+  } finally {
+    setLoading(false);
+  }
+};
 
   /* =========================================================
      EMPTY CART

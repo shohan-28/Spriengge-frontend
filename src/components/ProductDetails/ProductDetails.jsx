@@ -70,7 +70,14 @@ const ProductDetails = () => {
  
 
 const product = Array.isArray(products)
-  ? products.find((item) => String(item.id) === String(productId))
+  ? products.find((item) => {
+      const currentProductId =
+        item?.productId ??
+        item?.id ??
+        item?._id;
+
+      return String(currentProductId) === String(productId);
+    })
   : null;
 
   /*
@@ -79,32 +86,113 @@ const product = Array.isArray(products)
   ============================================================
   */
 
-  const variants = useMemo(() => {
-    if (!product) return [];
+const variants = useMemo(() => {
+  if (!product) return [];
 
-    if (
-      Array.isArray(product.variants) &&
-      product.variants.length > 0
-    ) {
-      return product.variants;
-    }
+  if (
+    Array.isArray(product.variants) &&
+    product.variants.length > 0
+  ) {
+    return product.variants.map((variant, index) => {
+      const fallbackVariantId = `${
+        product.productId ??
+        product.id ??
+        product._id
+      }-variant-${index}`;
 
-    return [
-      {
-        id: `${product.id}-default`,
-        color: product.color || "Default",
-        colorCode: product.colorCode || "#e5e7eb",
-        price: product.price,
-        oldPrice: product.oldPrice,
-        stock: product.stock || 0,
+      return {
+        ...variant,
+
+        variantId:
+          variant?.variantId ??
+          variant?.id ??
+          fallbackVariantId,
+
+        id:
+          variant?.id ??
+          variant?.variantId ??
+          fallbackVariantId,
+
+        color: variant?.color || "Default",
+
+        colorCode:
+          variant?.colorCode || "#e5e7eb",
+
+        price: Number(
+          variant?.price ??
+            product?.price ??
+            0
+        ),
+
+        oldPrice: Number(
+          variant?.oldPrice ??
+            product?.oldPrice ??
+            0
+        ),
+
+        stock: Number(
+          variant?.stock ??
+            product?.stock ??
+            0
+        ),
+
         images:
-          Array.isArray(product.images) &&
-          product.images.length > 0
-            ? product.images
-            : [product.image],
-      },
-    ];
-  }, [product]);
+          Array.isArray(variant?.images)
+            ? variant.images
+            : [],
+
+        sizes:
+          Array.isArray(variant?.sizes)
+            ? variant.sizes
+            : [],
+      };
+    });
+  }
+
+  const defaultVariantId = `${
+    product.productId ??
+    product.id ??
+    product._id
+  }-default`;
+
+  return [
+    {
+      ...product,
+
+      variantId: defaultVariantId,
+
+      id: defaultVariantId,
+
+      color:
+        product.color || "Default",
+
+      colorCode:
+        product.colorCode || "#e5e7eb",
+
+      price: Number(
+        product.price || 0
+      ),
+
+      oldPrice: Number(
+        product.oldPrice || 0
+      ),
+
+      stock: Number(
+        product.stock || 0
+      ),
+
+      images:
+        Array.isArray(product.images) &&
+        product.images.length > 0
+          ? product.images
+          : product.image
+          ? [product.image]
+          : [],
+
+      sizes: [],
+    },
+  ];
+}, [product]);
 
   /*
   ============================================================
@@ -344,47 +432,72 @@ const product = Array.isArray(products)
   ============================================================
   */
 
-  const checkoutProduct = useMemo(() => {
-    if (!product) return null;
+const checkoutProduct = useMemo(() => {
+  if (!product) return null;
 
-    return {
-      ...product,
+  const numericProductId =
+    product?.productId ??
+    product?.id ??
+    product?._id ??
+    null;
 
-      variantId:
-        selectedVariant?.id || null,
+  const currentVariantId =
+    selectedVariant?.variantId ??
+    selectedVariant?.id ??
+    selectedVariant?.productId ??
+    null;
 
-      selectedColor:
-        selectedVariant?.color ||
-        product.color ||
-        null,
+  const currentImage =
+    selectedVariant?.images?.[0] ||
+    selectedImage ||
+    product?.image ||
+    "";
 
-      selectedColorCode:
-        selectedVariant?.colorCode ||
-        null,
+  return {
+    ...product,
 
-      selectedSize:
-        selectedSize || null,
+    productId: numericProductId,
+    id: numericProductId,
 
-      price: currentPrice,
+    variantId: currentVariantId,
 
-      oldPrice: currentOldPrice,
+    selectedColor:
+      selectedVariant?.color ||
+      product?.color ||
+      null,
 
-      image:
-        selectedVariant?.images?.[0] ||
-        selectedImage ||
-        product.image,
+    selectedColorCode:
+      selectedVariant?.colorCode ||
+      null,
 
-      quantity,
-    };
-  }, [
-    product,
-    selectedVariant,
-    selectedSize,
-    currentPrice,
-    currentOldPrice,
-    selectedImage,
+    selectedSize:
+      selectedSize || null,
+
+    price: currentPrice,
+    oldPrice: currentOldPrice,
+
+    image: currentImage,
+
+    images:
+      Array.isArray(selectedVariant?.images) &&
+      selectedVariant.images.length > 0
+        ? selectedVariant.images
+        : product?.images || [],
+
+    stock: currentStock,
+
     quantity,
-  ]);
+  };
+}, [
+  product,
+  selectedVariant,
+  selectedSize,
+  currentPrice,
+  currentOldPrice,
+  selectedImage,
+  currentStock,
+  quantity,
+]);
 
   /*
   ============================================================
@@ -437,16 +550,27 @@ const product = Array.isArray(products)
   ============================================================
   */
 
-  const handleBuyNow = () => {
-    if (!validateSelection()) return;
+ const handleBuyNow = () => {
+  if (!validateSelection()) return;
 
-    navigate("/Checkout", {
-      state: {
-        product: checkoutProduct,
-        quantity,
-      },
-    });
-  };
+  navigate("/Checkout", {
+    state: {
+      product: checkoutProduct,
+      quantity,
+      productId:
+        checkoutProduct?.productId ??
+        checkoutProduct?.id ??
+        product?.productId ??
+        product?.id ??
+        null,
+      variantId:
+        checkoutProduct?.variantId ??
+        selectedVariant?.variantId ??
+        selectedVariant?.id ??
+        null,
+    },
+  });
+};
 
   /*
   ============================================================
@@ -534,7 +658,12 @@ const product = Array.isArray(products)
 
         image: productImages,
 
-        sku: String(product.id),
+        sku: String(
+  product?.productId ??
+    product?.id ??
+    product?._id ??
+    ""
+),
 
         category: product.category || undefined,
 
@@ -1086,9 +1215,19 @@ const product = Array.isArray(products)
                         const isOutOfStock =
                           variantStock <= 0;
 
-                        const isSelected =
-                          selectedVariant?.id ===
-                          variant.id;
+                        const selectedVariantId =
+  selectedVariant?.variantId ??
+  selectedVariant?.id ??
+  "";
+
+const currentVariantId =
+  variant?.variantId ??
+  variant?.id ??
+  "";
+
+const isSelected =
+  String(selectedVariantId) ===
+  String(currentVariantId);
 
                         return (
                           <button

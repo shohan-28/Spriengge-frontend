@@ -1,6 +1,6 @@
 [
   {
-    "id": 1,
+    "productId": 1,
     "name": "Wireless Bluetooth Headphones",
     "brand": "Sony",
     "category": "Electronics",
@@ -27,7 +27,7 @@
 
     "variants": [
       {
-        "id": "headphone-black",
+        "productId": "headphone-black",
         "color": "Black",
         "colorCode": "#111827",
         "price": 2499,
@@ -39,7 +39,7 @@
         ]
       },
       {
-        "id": "headphone-white",
+        "productId": "headphone-white",
         "color": "White",
         "colorCode": "#F8FAFC",
         "price": 2599,
@@ -51,7 +51,7 @@
         ]
       },
       {
-        "id": "headphone-silver",
+        "productId": "headphone-silver",
         "color": "Silver",
         "colorCode": "#CBD5E1",
         "price": 2699,
@@ -127,7 +127,7 @@
   },
 
   {
-    "id": 2,
+    "productId": 2,
     "name": "Men's Casual T-Shirt",
     "brand": "H&M",
     "category": "Fashion",
@@ -154,7 +154,7 @@
 
     "variants": [
       {
-        "id": "tshirt-white",
+        "productId": "tshirt-white",
         "color": "White",
         "colorCode": "#FFFFFF",
         "price": 799,
@@ -184,7 +184,7 @@
         ]
       },
       {
-        "id": "tshirt-black",
+        "productId": "tshirt-black",
         "color": "Black",
         "colorCode": "#000000",
         "price": 849,
@@ -214,7 +214,7 @@
         ]
       },
       {
-        "id": "tshirt-navy",
+        "productId": "tshirt-navy",
         "color": "Navy Blue",
         "colorCode": "#1E3A5F",
         "price": 849,
@@ -305,7 +305,7 @@
   },
 
   {
-    "id": 3,
+    "productId": 3,
     "name": "Smart Watch",
     "brand": "Apple",
     "category": "Electronics",
@@ -332,7 +332,7 @@
 
     "variants": [
       {
-        "id": "watch-silver",
+        "productId": "watch-silver",
         "color": "Silver",
         "colorCode": "#C0C0C0",
         "price": 4599,
@@ -344,7 +344,7 @@
         ]
       },
       {
-        "id": "watch-black",
+        "productId": "watch-black",
         "color": "Black",
         "colorCode": "#111111",
         "price": 4699,
@@ -356,7 +356,7 @@
         ]
       },
       {
-        "id": "watch-gold",
+        "productId": "watch-gold",
         "color": "Gold",
         "colorCode": "#D4AF37",
         "price": 4799,
@@ -432,7 +432,7 @@
   },
 
   {
-    "id": 4,
+    "productId": 4,
     "name": "Running Shoes",
     "brand": "Nike",
     "category": "Footwear",
@@ -459,7 +459,7 @@
 
     "variants": [
       {
-        "id": "shoes-red",
+        "productId": "shoes-red",
         "color": "Red",
         "colorCode": "#EF4444",
         "price": 3299,
@@ -493,7 +493,7 @@
         ]
       },
       {
-        "id": "shoes-black",
+        "productId": "shoes-black",
         "color": "Black",
         "colorCode": "#111827",
         "price": 3399,
@@ -527,7 +527,7 @@
         ]
       },
       {
-        "id": "shoes-white",
+        "productId": "shoes-white",
         "color": "White",
         "colorCode": "#F8FAFC",
         "price": 3399,
@@ -622,7 +622,7 @@
   },
 
   {
-    "id": 5,
+    "productId": 5,
     "name": "Gaming Mouse",
     "brand": "Logitech",
     "category": "Accessories",
@@ -649,7 +649,7 @@
 
     "variants": [
       {
-        "id": "mouse-black",
+        "productId": "mouse-black",
         "color": "Black",
         "colorCode": "#111111",
         "price": 1599,
@@ -661,7 +661,7 @@
         ]
       },
       {
-        "id": "mouse-white",
+        "productId": "mouse-white",
         "color": "White",
         "colorCode": "#F8FAFC",
         "price": 1699,
