@@ -33,12 +33,75 @@ const normalizeItem = (item, forcedQuantity = null) => {
     item?._id ??
     null;
 
+  const nestedVariant = item?.selectedVariant || item?.variant || null;
+
   const variantId =
     item?.variantId ??
-    item?.selectedVariant?.variantId ??
-    item?.selectedVariant?.id ??
-    item?.selectedVariant?._id ??
+    nestedVariant?.variantId ??
+    nestedVariant?.id ??
+    nestedVariant?.productId ??
     null;
+
+  let selectedColor =
+    item?.selectedColor ??
+    item?.color ??
+    nestedVariant?.color ??
+    null;
+
+  let selectedColorCode =
+    item?.selectedColorCode ??
+    item?.colorCode ??
+    nestedVariant?.colorCode ??
+    null;
+
+  let selectedSize =
+    item?.selectedSize ??
+    item?.size ??
+    null;
+
+  /*
+     If an old cart item lost selectedSize but still contains
+     the canonical variants array, recover the only available
+     size automatically. If multiple sizes exist, leave it empty
+     so the backend can correctly require an explicit selection.
+  */
+  if (!selectedSize && Array.isArray(item?.variants)) {
+    const variant = item.variants.find((candidate) => {
+      const candidateId =
+        candidate?.variantId ??
+        candidate?.id ??
+        candidate?.productId ??
+        null;
+
+      const idMatches =
+        variantId &&
+        candidateId &&
+        String(candidateId) === String(variantId);
+
+      const colorMatches =
+        selectedColor &&
+        String(candidate?.color || "").trim().toLowerCase() ===
+          String(selectedColor).trim().toLowerCase();
+
+      return idMatches || colorMatches;
+    });
+
+    const availableSizes = Array.isArray(variant?.sizes)
+      ? variant.sizes.filter(
+          (size) => Number(size?.stock || 0) > 0
+        )
+      : [];
+
+    if (availableSizes.length === 1) {
+      selectedSize = availableSizes[0]?.size || null;
+    }
+
+    if (variant) {
+      selectedColor = selectedColor || variant.color || null;
+      selectedColorCode =
+        selectedColorCode || variant.colorCode || null;
+    }
+  }
 
   const quantity =
     forcedQuantity !== null
@@ -47,6 +110,15 @@ const normalizeItem = (item, forcedQuantity = null) => {
           1,
           Number(item?.quantity ?? item?.qty ?? 1) || 1
         );
+
+  const price = Number(
+    item?.price ??
+    item?.unitPrice ??
+    nestedVariant?.price ??
+    0
+  );
+
+  const safePrice = Number.isFinite(price) ? price : 0;
 
   return {
     productId,
@@ -60,40 +132,17 @@ const normalizeItem = (item, forcedQuantity = null) => {
     productImage:
       item?.productImage ||
       item?.image ||
+      nestedVariant?.images?.[0] ||
       item?.images?.[0] ||
       "",
 
     variantId,
-
-    selectedColor:
-      item?.selectedColor ||
-      item?.color ||
-      null,
-
-    selectedColorCode:
-      item?.selectedColorCode ||
-      item?.colorCode ||
-      null,
-
-    selectedSize:
-      item?.selectedSize ||
-      item?.size ||
-      null,
-
-    price: Number(
-  item?.price ??
-  item?.unitPrice ??
-  0
-),
-
-quantity,
-
-subtotal:
-  Number(
-    item?.price ??
-    item?.unitPrice ??
-    0
-  ) * quantity,
+    selectedColor,
+    selectedColorCode,
+    selectedSize,
+    price: safePrice,
+    quantity,
+    subtotal: safePrice * quantity,
   };
 };
 
@@ -167,6 +216,17 @@ const [orderItems, setOrderItems] = useState(() => {
           product?.productId ??
           product?.id ??
           product?._id ??
+          null,
+        variantId:
+          state?.variantId ??
+          product?.variantId ??
+          product?.selectedVariant?.variantId ??
+          product?.selectedVariant?.id ??
+          product?.selectedVariant?.productId ??
+          null,
+        selectedSize:
+          product?.selectedSize ??
+          product?.size ??
           null,
       },
       buyNowQuantity

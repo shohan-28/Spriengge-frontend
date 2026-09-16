@@ -106,11 +106,13 @@ const variants = useMemo(() => {
         variantId:
           variant?.variantId ??
           variant?.id ??
+          variant?.productId ??
           fallbackVariantId,
 
         id:
           variant?.id ??
           variant?.variantId ??
+          variant?.productId ??
           fallbackVariantId,
 
         color: variant?.color || "Default",
@@ -432,13 +434,12 @@ const variants = useMemo(() => {
   ============================================================
   */
 
-const checkoutProduct = useMemo(() => {
+  const checkoutProduct = useMemo(() => {
   if (!product) return null;
 
   const numericProductId =
     product?.productId ??
     product?.id ??
-    product?._id ??
     null;
 
   const currentVariantId =
@@ -457,6 +458,7 @@ const checkoutProduct = useMemo(() => {
     ...product,
 
     productId: numericProductId,
+
     id: numericProductId,
 
     variantId: currentVariantId,
@@ -474,12 +476,15 @@ const checkoutProduct = useMemo(() => {
       selectedSize || null,
 
     price: currentPrice,
+
     oldPrice: currentOldPrice,
 
     image: currentImage,
 
     images:
-      Array.isArray(selectedVariant?.images) &&
+      Array.isArray(
+        selectedVariant?.images
+      ) &&
       selectedVariant.images.length > 0
         ? selectedVariant.images
         : product?.images || [],
@@ -550,27 +555,18 @@ const checkoutProduct = useMemo(() => {
   ============================================================
   */
 
- const handleBuyNow = () => {
-  if (!validateSelection()) return;
+  const handleBuyNow = () => {
+    if (!validateSelection()) return;
 
-  navigate("/Checkout", {
-    state: {
-      product: checkoutProduct,
-      quantity,
-      productId:
-        checkoutProduct?.productId ??
-        checkoutProduct?.id ??
-        product?.productId ??
-        product?.id ??
-        null,
-      variantId:
-        checkoutProduct?.variantId ??
-        selectedVariant?.variantId ??
-        selectedVariant?.id ??
-        null,
-    },
-  });
-};
+    navigate("/Checkout", {
+      state: {
+        product: checkoutProduct,
+        quantity,
+        productId: checkoutProduct?.productId ?? null,
+        variantId: checkoutProduct?.variantId ?? null,
+      },
+    });
+  };
 
   /*
   ============================================================
