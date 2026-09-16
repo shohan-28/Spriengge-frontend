@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
-
 import {
   FiUser,
   FiPhone,
@@ -13,18 +12,20 @@ import {
   FiLock,
   FiCheck,
   FiShoppingBag,
+  FiX,
+  FiAlertCircle,
+  FiArrowRight,
 } from "react-icons/fi";
-
 import { clearCart } from "../Feature/CartSlice";
 import districtData from "../DistrictData/DistrictData";
+
+/* =========================================================
+   API URL
+========================================================= */
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
   "https://ourbackend.spriengge.shop/api";
-
-/* =========================================================
-   API URL NORMALIZE
-========================================================= */
 
 const BASE_API_URL = API_URL
   .trim()
@@ -55,7 +56,7 @@ const normalizeProductId = (value) => {
 
   const numberValue = Number(value);
 
-  if (!Number.isFinite(numberValue)) {
+  if (!Number.isFinite(numberValue) || numberValue < 1) {
     return null;
   }
 
@@ -85,22 +86,13 @@ const normalizeQuantity = (value) => {
 };
 
 /* =========================================================
-   FIND VARIANT FROM ITEM
+   FIND VARIANT
 ========================================================= */
 
 const findItemVariant = (item) => {
   if (!item) {
     return null;
   }
-
-  const variantId = normalizeVariantId(
-    item?.variantId
-  );
-
-  const selectedColor = cleanString(
-    item?.selectedColor ??
-      item?.color
-  ).toLowerCase();
 
   const variants = Array.isArray(item?.variants)
     ? item.variants
@@ -110,7 +102,17 @@ const findItemVariant = (item) => {
     return null;
   }
 
-  /* First priority: canonical variantId */
+  const variantId = normalizeVariantId(
+    item?.variantId
+  );
+
+  const selectedColor = cleanString(
+    item?.selectedColor ?? item?.color
+  ).toLowerCase();
+
+  /* -------------------------------------------------------
+     1. CANONICAL VARIANT ID
+  ------------------------------------------------------- */
 
   if (variantId) {
     const byId = variants.find(
@@ -125,7 +127,9 @@ const findItemVariant = (item) => {
     }
   }
 
-  /* Second priority: selected color */
+  /* -------------------------------------------------------
+     2. COLOR FALLBACK
+  ------------------------------------------------------- */
 
   if (selectedColor) {
     const byColor = variants.find(
@@ -155,17 +159,7 @@ const normalizeItem = (
     return null;
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | PRODUCT ID
-  |--------------------------------------------------------------------------
-  | Current backend identity:
-  | productId = Number
-  |
-  | IMPORTANT:
-  | Mongo _id is NOT used as productId.
-  |--------------------------------------------------------------------------
-  */
+  /* PRODUCT ID */
 
   const productId = normalizeProductId(
     item?.productId ??
@@ -177,22 +171,22 @@ const normalizeItem = (
     return null;
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | VARIANT
-  |--------------------------------------------------------------------------
-  */
+  /* NESTED VARIANT */
 
   const nestedVariant =
     item?.selectedVariant ||
     item?.variant ||
     null;
 
+  /* VARIANT ID */
+
   let variantId = normalizeVariantId(
     item?.variantId ??
       nestedVariant?.variantId ??
       ""
   );
+
+  /* COLOR */
 
   let selectedColor = cleanString(
     item?.selectedColor ??
@@ -201,6 +195,8 @@ const normalizeItem = (
       ""
   );
 
+  /* COLOR CODE */
+
   let selectedColorCode = cleanString(
     item?.selectedColorCode ??
       item?.colorCode ??
@@ -208,17 +204,15 @@ const normalizeItem = (
       ""
   );
 
+  /* SIZE */
+
   let selectedSize = cleanString(
     item?.selectedSize ??
       item?.size ??
       ""
   );
 
-  /*
-  |--------------------------------------------------------------------------
-  | FIND CANONICAL VARIANT
-  |--------------------------------------------------------------------------
-  */
+  /* FIND REAL VARIANT */
 
   const foundVariant = findItemVariant({
     ...item,
@@ -227,12 +221,6 @@ const normalizeItem = (
   });
 
   if (foundVariant) {
-    /*
-    |--------------------------------------------------------------------------
-    | Always trust canonical variantId
-    |--------------------------------------------------------------------------
-    */
-
     variantId = normalizeVariantId(
       foundVariant?.variantId
     );
@@ -244,13 +232,6 @@ const normalizeItem = (
     selectedColorCode =
       selectedColorCode ||
       cleanString(foundVariant?.colorCode);
-
-    /*
-    |--------------------------------------------------------------------------
-    | If exactly one size has stock,
-    | automatically select it.
-    |--------------------------------------------------------------------------
-    */
 
     const availableSizes = Array.isArray(
       foundVariant?.sizes
@@ -271,11 +252,7 @@ const normalizeItem = (
     }
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Quantity
-  |--------------------------------------------------------------------------
-  */
+  /* QUANTITY */
 
   const quantity =
     forcedQuantity !== null
@@ -286,20 +263,13 @@ const normalizeItem = (
             1
         );
 
-  /*
-  |--------------------------------------------------------------------------
-  | PRICE
-  |--------------------------------------------------------------------------
-  | Frontend price is display/compatibility data.
-  | Backend will validate the real DB price.
-  |--------------------------------------------------------------------------
-  */
+  /* PRICE */
 
   const rawPrice =
-    item?.price ??
-    item?.unitPrice ??
     foundVariant?.price ??
     nestedVariant?.price ??
+    item?.price ??
+    item?.unitPrice ??
     0;
 
   const price = Number(rawPrice);
@@ -309,11 +279,7 @@ const normalizeItem = (
       ? price
       : 0;
 
-  /*
-  |--------------------------------------------------------------------------
-  | IMAGE
-  |--------------------------------------------------------------------------
-  */
+  /* IMAGE */
 
   const productImage =
     item?.productImage ||
@@ -323,41 +289,26 @@ const normalizeItem = (
     item?.images?.[0] ||
     "";
 
-  /*
-  |--------------------------------------------------------------------------
-  | RETURN NORMALIZED ITEM
-  |--------------------------------------------------------------------------
-  */
+  /* NAME */
+
+  const productName =
+    cleanString(
+      item?.productName ??
+        item?.name ??
+        item?.title ??
+        "Product"
+    ) || "Product";
 
   return {
     productId,
-
-    productName:
-      item?.productName ||
-      item?.name ||
-      item?.title ||
-      "Product",
-
+    productName,
     productImage,
-
-    /*
-    |--------------------------------------------------------------------------
-    | Canonical variant identity
-    |--------------------------------------------------------------------------
-    */
-
     variantId,
-
     selectedColor,
-
     selectedColorCode,
-
     selectedSize,
-
     price: safePrice,
-
     quantity,
-
     subtotal:
       safePrice * quantity,
   };
@@ -374,9 +325,9 @@ const Checkout = () => {
 
   const state = location.state || {};
 
-  /* =========================================================
+  /* =======================================================
      BUY NOW / CART
-  ========================================================= */
+  ======================================================= */
 
   const isBuyNow = Boolean(
     state?.product
@@ -385,9 +336,10 @@ const Checkout = () => {
   const product =
     state?.product || null;
 
-  const buyNowQuantity = normalizeQuantity(
-    state?.quantity ?? 1
-  );
+  const buyNowQuantity =
+    normalizeQuantity(
+      state?.quantity ?? 1
+    );
 
   const cartItems = Array.isArray(
     state?.cartItems
@@ -395,9 +347,9 @@ const Checkout = () => {
     ? state.cartItems
     : [];
 
-  /* =========================================================
-     FORM
-  ========================================================= */
+  /* =======================================================
+     FORM STATE
+  ======================================================= */
 
   const [formData, setFormData] =
     useState({
@@ -409,24 +361,34 @@ const Checkout = () => {
       note: "",
     });
 
-  /* =========================================================
+  /* =======================================================
      LOADING
-  ========================================================= */
+  ======================================================= */
 
   const [loading, setLoading] =
     useState(false);
 
-  /* =========================================================
+  /* =======================================================
+     POPUP STATE
+  ======================================================= */
+
+  const [popup, setPopup] = useState({
+    open: false,
+    type: "",
+    title: "",
+    message: "",
+    orderId: "",
+    total: 0,
+    quantity: 0,
+  });
+
+  /* =======================================================
      ORDER ITEMS
-  ========================================================= */
+  ======================================================= */
 
   const [orderItems, setOrderItems] =
     useState(() => {
-      /*
-      |--------------------------------------------------------------------------
-      | BUY NOW
-      |--------------------------------------------------------------------------
-      */
+      /* BUY NOW */
 
       if (isBuyNow && product) {
         const normalizedProduct =
@@ -434,25 +396,10 @@ const Checkout = () => {
             {
               ...product,
 
-              /*
-              |--------------------------------------------------------------------------
-              | IMPORTANT
-              |--------------------------------------------------------------------------
-              | product.productId is canonical.
-              |--------------------------------------------------------------------------
-              */
-
               productId:
                 product?.productId ??
+                product?.id ??
                 null,
-
-              /*
-              |--------------------------------------------------------------------------
-              | IMPORTANT
-              |--------------------------------------------------------------------------
-              | Only canonical variantId.
-              |--------------------------------------------------------------------------
-              */
 
               variantId:
                 state?.variantId ??
@@ -488,11 +435,7 @@ const Checkout = () => {
           : [];
       }
 
-      /*
-      |--------------------------------------------------------------------------
-      | CART CHECKOUT
-      |--------------------------------------------------------------------------
-      */
+      /* CART CHECKOUT */
 
       return cartItems
         .map((item) =>
@@ -501,9 +444,9 @@ const Checkout = () => {
         .filter(Boolean);
     });
 
-  /* =========================================================
+  /* =======================================================
      INCREASE QUANTITY
-  ========================================================= */
+  ======================================================= */
 
   const increaseQuantity = (index) => {
     if (loading) {
@@ -511,32 +454,32 @@ const Checkout = () => {
     }
 
     setOrderItems((previous) =>
-      previous.map((item, itemIndex) => {
-        if (itemIndex !== index) {
-          return item;
+      previous.map(
+        (item, itemIndex) => {
+          if (itemIndex !== index) {
+            return item;
+          }
+
+          const newQuantity =
+            normalizeQuantity(
+              item.quantity
+            ) + 1;
+
+          return {
+            ...item,
+            quantity: newQuantity,
+            subtotal:
+              Number(item.price) *
+              newQuantity,
+          };
         }
-
-        const newQuantity =
-          normalizeQuantity(
-            item.quantity
-          ) + 1;
-
-        return {
-          ...item,
-
-          quantity: newQuantity,
-
-          subtotal:
-            Number(item.price) *
-            newQuantity,
-        };
-      })
+      )
     );
   };
 
-  /* =========================================================
+  /* =======================================================
      DECREASE QUANTITY
-  ========================================================= */
+  ======================================================= */
 
   const decreaseQuantity = (index) => {
     if (loading) {
@@ -544,33 +487,33 @@ const Checkout = () => {
     }
 
     setOrderItems((previous) =>
-      previous.map((item, itemIndex) => {
-        if (
-          itemIndex !== index ||
-          Number(item.quantity) <= 1
-        ) {
-          return item;
+      previous.map(
+        (item, itemIndex) => {
+          if (
+            itemIndex !== index ||
+            Number(item.quantity) <= 1
+          ) {
+            return item;
+          }
+
+          const newQuantity =
+            Number(item.quantity) - 1;
+
+          return {
+            ...item,
+            quantity: newQuantity,
+            subtotal:
+              Number(item.price) *
+              newQuantity,
+          };
         }
-
-        const newQuantity =
-          Number(item.quantity) - 1;
-
-        return {
-          ...item,
-
-          quantity: newQuantity,
-
-          subtotal:
-            Number(item.price) *
-            newQuantity,
-        };
-      })
+      )
     );
   };
 
-  /* =========================================================
+  /* =======================================================
      REMOVE ITEM
-  ========================================================= */
+  ======================================================= */
 
   const removeItem = (index) => {
     if (loading) {
@@ -585,9 +528,9 @@ const Checkout = () => {
     );
   };
 
-  /* =========================================================
-     DISTRICTS
-  ========================================================= */
+  /* =======================================================
+     DISTRICT LIST
+  ======================================================= */
 
   const districtList = useMemo(() => {
     if (Array.isArray(districtData)) {
@@ -612,15 +555,13 @@ const Checkout = () => {
 
     if (
       districtData &&
-      typeof districtData ===
-        "object"
+      typeof districtData === "object"
     ) {
       return Object.entries(
         districtData
       ).map(
         ([name, thanas]) => ({
           district: name,
-
           thanas:
             Array.isArray(thanas)
               ? thanas
@@ -632,9 +573,9 @@ const Checkout = () => {
     return [];
   }, []);
 
-  /* =========================================================
+  /* =======================================================
      SELECTED DISTRICT
-  ========================================================= */
+  ======================================================= */
 
   const selectedDistrict =
     districtList.find((item) => {
@@ -653,18 +594,18 @@ const Checkout = () => {
       );
     });
 
-  /* =========================================================
+  /* =======================================================
      THANA LIST
-  ========================================================= */
+  ======================================================= */
 
   const thanaList =
     selectedDistrict?.thanas ||
     selectedDistrict?.thana ||
     [];
 
-  /* =========================================================
+  /* =======================================================
      SUBTOTAL
-  ========================================================= */
+  ======================================================= */
 
   const subtotal = useMemo(() => {
     return orderItems.reduce(
@@ -676,9 +617,9 @@ const Checkout = () => {
     );
   }, [orderItems]);
 
-  /* =========================================================
-     DELIVERY CHARGE
-  ========================================================= */
+  /* =======================================================
+     DELIVERY
+  ======================================================= */
 
   const deliveryCharge = useMemo(() => {
     if (!formData.district) {
@@ -695,16 +636,16 @@ const Checkout = () => {
       : 100;
   }, [formData.district]);
 
-  /* =========================================================
+  /* =======================================================
      TOTAL
-  ========================================================= */
+  ======================================================= */
 
   const total =
     subtotal + deliveryCharge;
 
-  /* =========================================================
+  /* =======================================================
      INPUT CHANGE
-  ========================================================= */
+  ======================================================= */
 
   const handleChange = (event) => {
     const {
@@ -712,21 +653,15 @@ const Checkout = () => {
       value,
     } = event.target;
 
-    /* DISTRICT */
-
     if (name === "district") {
       setFormData((previous) => ({
         ...previous,
-
         district: value,
-
         thana: "",
       }));
 
       return;
     }
-
-    /* PHONE */
 
     if (name === "phone") {
       const phone = value
@@ -735,25 +670,21 @@ const Checkout = () => {
 
       setFormData((previous) => ({
         ...previous,
-
         phone,
       }));
 
       return;
     }
 
-    /* OTHER */
-
     setFormData((previous) => ({
       ...previous,
-
       [name]: value,
     }));
   };
 
-  /* =========================================================
+  /* =======================================================
      VALIDATE ITEMS
-  ========================================================= */
+  ======================================================= */
 
   const validateItems = () => {
     if (!orderItems.length) {
@@ -761,36 +692,20 @@ const Checkout = () => {
     }
 
     for (const item of orderItems) {
-      /*
-      |--------------------------------------------------------------------------
-      | Product ID
-      |--------------------------------------------------------------------------
-      */
-
       if (
         !Number.isFinite(
           Number(item?.productId)
         ) ||
         Number(item.productId) < 1
       ) {
-        return `Product ID is missing for "${item?.productName || "product"}".`;
+        return `Product ID is missing for "${
+          item?.productName || "product"
+        }".`;
       }
-
-      /*
-      |--------------------------------------------------------------------------
-      | Product name
-      |--------------------------------------------------------------------------
-      */
 
       if (!item?.productName) {
         return "Product name is missing.";
       }
-
-      /*
-      |--------------------------------------------------------------------------
-      | Quantity
-      |--------------------------------------------------------------------------
-      */
 
       if (
         !Number.isFinite(
@@ -801,12 +716,6 @@ const Checkout = () => {
         return `Invalid quantity for "${item.productName}".`;
       }
 
-      /*
-      |--------------------------------------------------------------------------
-      | Price
-      |--------------------------------------------------------------------------
-      */
-
       if (
         !Number.isFinite(
           Number(item?.price)
@@ -816,17 +725,9 @@ const Checkout = () => {
         return `Invalid price for "${item.productName}".`;
       }
 
-      /*
-      |--------------------------------------------------------------------------
-      | Variant
-      |--------------------------------------------------------------------------
-      |--------------------------------------------------------------------------
-      */
-
       if (
         item?.variantId &&
-        typeof item.variantId !==
-          "string"
+        typeof item.variantId !== "string"
       ) {
         return `Invalid variant for "${item.productName}".`;
       }
@@ -835,9 +736,34 @@ const Checkout = () => {
     return null;
   };
 
-  /* =========================================================
+  /* =======================================================
+     CLOSE POPUP
+  ======================================================= */
+
+  const closePopup = () => {
+    setPopup({
+      open: false,
+      type: "",
+      title: "",
+      message: "",
+      orderId: "",
+      total: 0,
+      quantity: 0,
+    });
+  };
+
+  /* =======================================================
+     SUCCESS -> HOME
+  ======================================================= */
+
+  const handleContinueShopping = () => {
+    closePopup();
+    navigate("/");
+  };
+
+  /* =======================================================
      PLACE ORDER
-  ========================================================= */
+  ======================================================= */
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -846,9 +772,7 @@ const Checkout = () => {
       return;
     }
 
-    /* =======================================================
-       FORM VALIDATION
-    ======================================================= */
+    /* FORM VALIDATION */
 
     const name =
       cleanString(formData.name);
@@ -857,28 +781,29 @@ const Checkout = () => {
       cleanString(formData.phone);
 
     const district =
-      cleanString(
-        formData.district
-      );
+      cleanString(formData.district);
 
     const thana =
       cleanString(formData.thana);
 
     const address =
-      cleanString(
-        formData.address
-      );
+      cleanString(formData.address);
 
     const note =
       cleanString(formData.note);
 
-    if (
-      !name ||
-      name.length < 2
-    ) {
-      alert(
-        "Please enter a valid full name."
-      );
+    if (!name || name.length < 2) {
+      setPopup({
+        open: true,
+        type: "error",
+        title: "Check your details",
+        message:
+          "Please enter your full name.",
+        orderId: "",
+        total: 0,
+        quantity: 0,
+      });
+
       return;
     }
 
@@ -886,23 +811,47 @@ const Checkout = () => {
       !phone ||
       !/^01\d{9}$/.test(phone)
     ) {
-      alert(
-        "Please enter a valid Bangladesh phone number."
-      );
+      setPopup({
+        open: true,
+        type: "error",
+        title: "Invalid phone number",
+        message:
+          "Please enter a valid 11-digit Bangladesh phone number.",
+        orderId: "",
+        total: 0,
+        quantity: 0,
+      });
+
       return;
     }
 
     if (!district) {
-      alert(
-        "Please select your district."
-      );
+      setPopup({
+        open: true,
+        type: "error",
+        title: "District required",
+        message:
+          "Please select your delivery district.",
+        orderId: "",
+        total: 0,
+        quantity: 0,
+      });
+
       return;
     }
 
     if (!thana) {
-      alert(
-        "Please select your thana."
-      );
+      setPopup({
+        open: true,
+        type: "error",
+        title: "Thana required",
+        message:
+          "Please select your delivery thana.",
+        orderId: "",
+        total: 0,
+        quantity: 0,
+      });
+
       return;
     }
 
@@ -910,110 +859,68 @@ const Checkout = () => {
       !address ||
       address.length < 5
     ) {
-      alert(
-        "Please enter a complete delivery address."
-      );
+      setPopup({
+        open: true,
+        type: "error",
+        title: "Address required",
+        message:
+          "Please enter your complete delivery address.",
+        orderId: "",
+        total: 0,
+        quantity: 0,
+      });
+
       return;
     }
 
-    /* =======================================================
-       ITEM VALIDATION
-    ======================================================= */
+    /* ITEM VALIDATION */
 
     const itemError =
       validateItems();
 
     if (itemError) {
-      alert(itemError);
+      setPopup({
+        open: true,
+        type: "error",
+        title: "Order cannot be placed",
+        message: itemError,
+        orderId: "",
+        total: 0,
+        quantity: 0,
+      });
+
       return;
     }
 
-    /* =======================================================
-       FINAL ITEMS
-       Backend will verify product/variant/size/price.
-    ======================================================= */
+    /* FINAL ITEMS */
 
     const finalItems =
       orderItems.map((item) => ({
-        /*
-        |--------------------------------------------------------------------------
-        | CANONICAL PRODUCT ID
-        |--------------------------------------------------------------------------
-        */
-
         productId:
           Number(item.productId),
 
-        /*
-        |--------------------------------------------------------------------------
-        | Display data
-        |--------------------------------------------------------------------------
-        */
-
-        productName:
-          item.productName || "",
-
-        productImage:
-          item.productImage || "",
-
-        /*
-        |--------------------------------------------------------------------------
-        | CANONICAL VARIANT ID
-        |--------------------------------------------------------------------------
-        */
-
         variantId:
           item.variantId || "",
-
-        /*
-        |--------------------------------------------------------------------------
-        | Variant selections
-        |--------------------------------------------------------------------------
-        */
 
         selectedColor:
           item.selectedColor || "",
 
         selectedColorCode:
-          item.selectedColorCode ||
-          "",
+          item.selectedColorCode || "",
 
         selectedSize:
           item.selectedSize || "",
 
-        /*
-        |--------------------------------------------------------------------------
-        | Price
-        |--------------------------------------------------------------------------
-        | Backend will calculate/verify the real price.
-        |--------------------------------------------------------------------------
-        */
-
-        price:
-          Number(item.price),
-
         quantity:
-          Number(item.quantity),
-
-        subtotal:
-          Number(item.price) *
           Number(item.quantity),
       }));
 
     const firstItem =
       finalItems[0];
 
-    /* =======================================================
-       ORDER PAYLOAD
-    ======================================================= */
+    /* ORDER PAYLOAD */
 
     const orderData = {
-      /*
-      |--------------------------------------------------------------------------
-      | CUSTOMER
-      |--------------------------------------------------------------------------
-      */
-
       name,
       phone,
       district,
@@ -1021,32 +928,12 @@ const Checkout = () => {
       address,
       note,
 
-      /*
-      |--------------------------------------------------------------------------
-      | ORDER TYPE
-      |--------------------------------------------------------------------------
-      */
-
       orderType: isBuyNow
         ? "buy_now"
         : "cart",
 
-      /*
-      |--------------------------------------------------------------------------
-      | BACKWARD COMPATIBILITY
-      |--------------------------------------------------------------------------
-      | orderRoutes.js supports these first-item fields.
-      |--------------------------------------------------------------------------
-      */
-
       productId:
         firstItem.productId,
-
-      productName:
-        firstItem.productName,
-
-      productImage:
-        firstItem.productImage,
 
       variantId:
         firstItem.variantId,
@@ -1060,25 +947,10 @@ const Checkout = () => {
       selectedSize:
         firstItem.selectedSize,
 
-      price:
-        Number(firstItem.price),
-
       quantity:
-        Number(firstItem.quantity),
-
-      /*
-      |--------------------------------------------------------------------------
-      | ALL ORDER ITEMS
-      |--------------------------------------------------------------------------
-      */
+        firstItem.quantity,
 
       items: finalItems,
-
-      /*
-      |--------------------------------------------------------------------------
-      | FINANCIAL
-      |--------------------------------------------------------------------------
-      */
 
       subtotal:
         Number(subtotal),
@@ -1089,35 +961,18 @@ const Checkout = () => {
       total:
         Number(total),
 
-      /*
-      |--------------------------------------------------------------------------
-      | PAYMENT
-      |--------------------------------------------------------------------------
-      */
-
       paymentMethod:
         "cash_on_delivery",
 
       paymentStatus:
         "pending",
 
-      /*
-      |--------------------------------------------------------------------------
-      | SOURCE
-      |--------------------------------------------------------------------------
-      */
-
-      source: "website",
+      source:
+        "website",
 
       orderSource:
         "website",
     };
-
-    /*
-    |--------------------------------------------------------------------------
-    | DEBUG
-    |--------------------------------------------------------------------------
-    */
 
     console.log(
       "========== ORDER PAYLOAD =========="
@@ -1134,10 +989,6 @@ const Checkout = () => {
     console.log(
       "==================================="
     );
-
-    /* =======================================================
-       SEND ORDER
-    ======================================================= */
 
     setLoading(true);
 
@@ -1172,6 +1023,8 @@ const Checkout = () => {
         data = null;
       }
 
+      /* API ERROR */
+
       if (!response.ok) {
         throw new Error(
           data?.message ||
@@ -1185,49 +1038,78 @@ const Checkout = () => {
         data
       );
 
-      alert(
-        "Order placed successfully! 🎉"
-      );
+      /* =================================================
+         SAVE SUCCESS SNAPSHOT
+      ================================================= */
 
-      /*
-      |--------------------------------------------------------------------------
-      | Clear Redux cart only for normal cart checkout.
-      |--------------------------------------------------------------------------
-      */
+      const orderId =
+        data?.order?._id ||
+        data?.order?.orderId ||
+        data?.orderId ||
+        data?.data?._id ||
+        data?._id ||
+        "";
+
+      const orderedQuantity =
+        orderItems.reduce(
+          (sum, item) =>
+            sum +
+            Number(
+              item?.quantity || 0
+            ),
+          0
+        );
+
+      const orderedTotal =
+        Number(total);
+
+      /* CLEAR CART */
 
       if (!isBuyNow) {
         dispatch(clearCart());
       }
 
-      /*
-      |--------------------------------------------------------------------------
-      | Go home
-      |--------------------------------------------------------------------------
-      */
+      /* SUCCESS POPUP */
 
-      navigate("/");
+      setPopup({
+        open: true,
+        type: "success",
+        title: "Order Confirmed",
+        message:
+          "Thank you! Your order has been placed successfully.",
+        orderId,
+        total: orderedTotal,
+        quantity: orderedQuantity,
+      });
     } catch (error) {
       console.error(
         "ORDER ERROR:",
         error
       );
 
-      alert(
-        `Order failed!\n\n${
+      /* ERROR POPUP */
+
+      setPopup({
+        open: true,
+        type: "error",
+        title: "Order Failed",
+        message:
           error?.message ||
-          "Please try again."
-        }`
-      );
+          "Something went wrong while placing your order.",
+        orderId: "",
+        total: 0,
+        quantity: 0,
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  /* =========================================================
+  /* =======================================================
      EMPTY CART
-  ========================================================= */
+  ======================================================= */
 
-  if (!orderItems.length) {
+  if (!orderItems.length && !popup.open) {
     return (
       <div className="min-h-screen bg-[#f7f7f5] flex items-center justify-center px-4">
         <div className="bg-white border border-gray-200 rounded-3xl p-10 text-center shadow-sm">
@@ -1261,16 +1143,16 @@ const Checkout = () => {
     );
   }
 
-  /* =========================================================
+  /* =======================================================
      UI
-  ========================================================= */
+  ======================================================= */
 
   return (
     <div className="min-h-screen bg-[#f7f7f5] text-gray-900">
 
-      {/* =====================================================
+      {/* ===================================================
           HEADER
-      ===================================================== */}
+      =================================================== */}
 
       <div className="border-b border-gray-200 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1306,9 +1188,9 @@ const Checkout = () => {
         </div>
       </div>
 
-      {/* =====================================================
+      {/* ===================================================
           MAIN
-      ===================================================== */}
+      =================================================== */}
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
 
@@ -1343,9 +1225,9 @@ const Checkout = () => {
           </p>
         </div>
 
-        {/* ===================================================
+        {/* =================================================
             STEPS
-        =================================================== */}
+        ================================================= */}
 
         <div className="hidden md:flex items-center mb-10">
 
@@ -1403,9 +1285,9 @@ const Checkout = () => {
 
         </div>
 
-        {/* ===================================================
+        {/* =================================================
             FORM
-        =================================================== */}
+        ================================================= */}
 
         <form
           onSubmit={handleSubmit}
@@ -1423,6 +1305,7 @@ const Checkout = () => {
             <section className="bg-white border border-gray-200 rounded-3xl p-5 sm:p-7 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
 
               <div className="flex items-start justify-between mb-7">
+
                 <div className="flex items-center gap-4">
 
                   <div className="w-11 h-11 rounded-2xl bg-gray-100 flex items-center justify-center">
@@ -1448,6 +1331,7 @@ const Checkout = () => {
                 <span className="hidden sm:block text-xs font-medium text-gray-400">
                   Required fields
                 </span>
+
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -1463,6 +1347,7 @@ const Checkout = () => {
                   </label>
 
                   <div className="relative">
+
                     <FiUser
                       size={17}
                       className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
@@ -1482,6 +1367,7 @@ const Checkout = () => {
                       disabled={loading}
                       className="w-full h-13 border border-gray-200 rounded-2xl bg-gray-50/60 pl-11 pr-4 text-sm outline-none transition-all duration-200 focus:bg-white focus:border-gray-900 focus:ring-4 focus:ring-gray-900/5 disabled:opacity-60"
                     />
+
                   </div>
                 </div>
 
@@ -1496,6 +1382,7 @@ const Checkout = () => {
                   </label>
 
                   <div className="relative">
+
                     <FiPhone
                       size={17}
                       className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
@@ -1517,10 +1404,12 @@ const Checkout = () => {
                       disabled={loading}
                       className="w-full h-13 border border-gray-200 rounded-2xl bg-gray-50/60 pl-11 pr-4 text-sm outline-none transition-all duration-200 focus:bg-white focus:border-gray-900 focus:ring-4 focus:ring-gray-900/5 disabled:opacity-60"
                     />
+
                   </div>
                 </div>
 
               </div>
+
             </section>
 
             {/* DELIVERY ADDRESS */}
@@ -1603,6 +1492,7 @@ const Checkout = () => {
                       }
                     )}
                   </select>
+
                 </div>
 
                 {/* THANA */}
@@ -1664,6 +1554,7 @@ const Checkout = () => {
                       }
                     )}
                   </select>
+
                 </div>
 
               </div>
@@ -1671,6 +1562,7 @@ const Checkout = () => {
               {/* ADDRESS */}
 
               <div className="mt-5">
+
                 <label className="block text-sm font-semibold mb-2">
                   Full Address
                   <span className="text-red-500 ml-1">
@@ -1692,11 +1584,13 @@ const Checkout = () => {
                   disabled={loading}
                   className="w-full border border-gray-200 rounded-2xl bg-gray-50/60 px-4 py-3.5 text-sm outline-none resize-none transition-all focus:bg-white focus:border-gray-900 focus:ring-4 focus:ring-gray-900/5 disabled:opacity-60"
                 />
+
               </div>
 
               {/* NOTE */}
 
               <div className="mt-5">
+
                 <label className="block text-sm font-semibold mb-2">
                   Order Note
 
@@ -1706,6 +1600,7 @@ const Checkout = () => {
                 </label>
 
                 <div className="relative">
+
                   <FiFileText
                     size={17}
                     className="absolute left-4 top-4 text-gray-400"
@@ -1724,7 +1619,9 @@ const Checkout = () => {
                     disabled={loading}
                     className="w-full border border-gray-200 rounded-2xl bg-gray-50/60 pl-11 pr-4 py-3.5 text-sm outline-none resize-none transition-all focus:bg-white focus:border-gray-900 focus:ring-4 focus:ring-gray-900/5 disabled:opacity-60"
                   />
+
                 </div>
+
               </div>
 
             </section>
@@ -1828,11 +1725,13 @@ const Checkout = () => {
                         </p>
 
                         <div className="mt-1 flex items-center justify-end gap-1">
+
                           <div className="w-2 h-2 rounded-full bg-green-500" />
 
                           <span className="text-[11px] font-medium text-green-600">
                             Selected
                           </span>
+
                         </div>
                       </>
                     ) : (
@@ -2121,6 +2020,7 @@ const Checkout = () => {
                 <div className="space-y-3">
 
                   <div className="flex items-center justify-between text-sm">
+
                     <span className="text-white/55">
                       Subtotal
                     </span>
@@ -2129,14 +2029,17 @@ const Checkout = () => {
                       ৳
                       {subtotal.toLocaleString()}
                     </span>
+
                   </div>
 
                   <div className="flex items-center justify-between text-sm">
+
                     <span className="text-white/55">
                       Delivery Charge
                     </span>
 
                     <span className="font-semibold text-white">
+
                       {formData.district ? (
                         <>
                           ৳
@@ -2147,7 +2050,9 @@ const Checkout = () => {
                           Select district
                         </span>
                       )}
+
                     </span>
+
                   </div>
 
                 </div>
@@ -2159,6 +2064,7 @@ const Checkout = () => {
                   <div className="flex items-end justify-between">
 
                     <div>
+
                       <p className="text-xs uppercase tracking-wider text-white/40">
                         Total
                       </p>
@@ -2167,6 +2073,7 @@ const Checkout = () => {
                         ৳
                         {total.toLocaleString()}
                       </p>
+
                     </div>
 
                     <span className="mb-1 rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-300">
@@ -2190,6 +2097,7 @@ const Checkout = () => {
                   </div>
 
                   <div>
+
                     <p className="text-sm font-semibold text-white">
                       Cash on Delivery
                     </p>
@@ -2199,6 +2107,7 @@ const Checkout = () => {
                       order arrives at your
                       doorstep.
                     </p>
+
                   </div>
 
                 </div>
@@ -2260,9 +2169,9 @@ const Checkout = () => {
 
       </div>
 
-      {/* =====================================================
+      {/* ===================================================
           CUSTOM SCROLLBAR
-      ===================================================== */}
+      =================================================== */}
 
       <style>
         {`
@@ -2281,6 +2190,234 @@ const Checkout = () => {
 
           .custom-scrollbar::-webkit-scrollbar-thumb:hover {
             background: rgba(255, 255, 255, 0.25);
+          }
+        `}
+      </style>
+
+      {/* ===================================================
+          POPUP
+      =================================================== */}
+
+      {popup.open && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
+          onMouseDown={(event) => {
+            if (
+              event.target ===
+              event.currentTarget
+            ) {
+              closePopup();
+            }
+          }}
+        >
+
+          <div
+            className="relative w-full max-w-[390px] overflow-hidden rounded-[28px] bg-white shadow-[0_25px_80px_rgba(0,0,0,0.25)] animate-[popupIn_.22s_ease-out]"
+            onMouseDown={(event) =>
+              event.stopPropagation()
+            }
+          >
+
+            {/* CLOSE */}
+
+            <button
+              type="button"
+              onClick={closePopup}
+              className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-500 transition hover:bg-gray-200 hover:text-gray-900"
+              aria-label="Close popup"
+            >
+              <FiX size={16} />
+            </button>
+
+            {/* CONTENT */}
+
+            <div className="px-7 pb-7 pt-8 text-center">
+
+              {/* ICON */}
+
+              <div
+                className={`mx-auto flex h-16 w-16 items-center justify-center rounded-2xl ${
+                  popup.type === "success"
+                    ? "bg-emerald-50"
+                    : "bg-red-50"
+                }`}
+              >
+
+                {popup.type ===
+                "success" ? (
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500 text-white shadow-sm">
+                    <FiCheck
+                      size={21}
+                      strokeWidth={3}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500 text-white shadow-sm">
+                    <FiAlertCircle
+                      size={21}
+                      strokeWidth={2.5}
+                    />
+                  </div>
+                )}
+
+              </div>
+
+              {/* TITLE */}
+
+              <h3 className="mt-5 text-xl font-bold tracking-tight text-gray-900">
+                {popup.title}
+              </h3>
+
+              {/* MESSAGE */}
+
+              <p className="mx-auto mt-2 max-w-[310px] text-sm leading-6 text-gray-500">
+                {popup.message}
+              </p>
+
+              {/* SUCCESS INFO */}
+
+              {popup.type ===
+                "success" && (
+                <div className="mt-5 overflow-hidden rounded-2xl border border-gray-100 bg-gray-50">
+
+                  {/* ORDER ID */}
+
+                  {popup.orderId && (
+                    <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+
+                      <span className="text-xs text-gray-400">
+                        Order ID
+                      </span>
+
+                      <span className="max-w-[180px] truncate text-xs font-semibold text-gray-800">
+                        {popup.orderId}
+                      </span>
+
+                    </div>
+                  )}
+
+                  {/* QUANTITY */}
+
+                  <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+
+                    <span className="text-xs text-gray-400">
+                      Items
+                    </span>
+
+                    <span className="text-sm font-semibold text-gray-800">
+                      {popup.quantity}
+                    </span>
+
+                  </div>
+
+                  {/* TOTAL */}
+
+                  <div className="flex items-center justify-between px-4 py-3">
+
+                    <span className="text-xs text-gray-400">
+                      Total
+                    </span>
+
+                    <span className="text-base font-bold text-gray-900">
+                      ৳
+                      {Number(
+                        popup.total
+                      ).toLocaleString()}
+                    </span>
+
+                  </div>
+
+                </div>
+              )}
+
+              {/* ERROR SMALL BOX */}
+
+              {popup.type ===
+                "error" && (
+                <div className="mt-5 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-left">
+
+                  <div className="flex gap-3">
+
+                    <FiAlertCircle
+                      className="mt-0.5 shrink-0 text-red-500"
+                      size={16}
+                    />
+
+                    <p className="text-xs leading-5 text-red-700">
+                      Please check the information
+                      and try again.
+                    </p>
+
+                  </div>
+
+                </div>
+              )}
+
+              {/* ACTION */}
+
+              {popup.type ===
+              "success" ? (
+                <button
+                  type="button"
+                  onClick={
+                    handleContinueShopping
+                  }
+                  className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-black px-5 py-3.5 text-sm font-semibold text-white transition-all hover:bg-gray-800 active:scale-[0.98]"
+                >
+                  <span>
+                    Continue Shopping
+                  </span>
+
+                  <FiArrowRight
+                    size={16}
+                  />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={closePopup}
+                  className="mt-6 w-full rounded-2xl bg-black px-5 py-3.5 text-sm font-semibold text-white transition-all hover:bg-gray-800 active:scale-[0.98]"
+                >
+                  Okay, Got It
+                </button>
+              )}
+
+            </div>
+
+            {/* SUCCESS FOOTER */}
+
+            {popup.type ===
+              "success" && (
+              <div className="border-t border-gray-100 bg-gray-50 px-6 py-3 text-center">
+
+                <p className="text-[11px] text-gray-400">
+                  Thank you for shopping
+                  with Spriengge.
+                </p>
+
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================
+          POPUP ANIMATION
+      =================================================== */}
+
+      <style>
+        {`
+          @keyframes popupIn {
+            from {
+              opacity: 0;
+              transform: translateY(12px) scale(0.97);
+            }
+
+            to {
+              opacity: 1;
+              transform: translateY(0) scale(1);
+            }
           }
         `}
       </style>

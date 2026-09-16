@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from "react-redux";
 import {
   increaseQuantity,
   decreaseQuantity,
-  removeCart,
+  removeFromCart,
 } from "../Feature/CartSlice";
 import { useNavigate } from "react-router-dom";
 
@@ -22,8 +22,12 @@ const CartPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
+  /* =========================================================
+     CART STATE
+  ========================================================= */
+
   const cartItems = useSelector(
-    (state) => state.cart?.cart || []
+    (state) => state.cart?.items || []
   );
 
   /* =========================================================
@@ -31,11 +35,14 @@ const CartPage = () => {
   ========================================================= */
 
   const totalItems = useMemo(() => {
-    return cartItems.reduce(
-      (total, item) =>
-        total + Math.max(1, Number(item?.quantity) || 1),
-      0
-    );
+    return cartItems.reduce((total, item) => {
+      const quantity = Math.max(
+        1,
+        Number(item?.quantity) || 1
+      );
+
+      return total + quantity;
+    }, 0);
   }, [cartItems]);
 
   /* =========================================================
@@ -45,6 +52,7 @@ const CartPage = () => {
   const subtotal = useMemo(() => {
     return cartItems.reduce((total, item) => {
       const price = Number(item?.price) || 0;
+
       const quantity = Math.max(
         1,
         Number(item?.quantity) || 1
@@ -200,19 +208,40 @@ const CartPage = () => {
               const itemSubtotal =
                 price * quantity;
 
+              /* ---------------------------------------------
+                 PRODUCT DATA
+              --------------------------------------------- */
+
+              const productId =
+                item?.productId ??
+                item?.id ??
+                "";
+
               const productName =
-                item?.name ||
                 item?.productName ||
+                item?.name ||
+                item?.title ||
                 "Product";
 
               const productImage =
-                item?.image ||
                 item?.productImage ||
+                item?.image ||
                 "";
+
+              /* ---------------------------------------------
+                 CART KEY
+                 Important for variant + size
+              --------------------------------------------- */
+
+              const cartKey =
+                item?.cartKey ||
+                `${productId}|${item?.variantId || ""}|${
+                  item?.selectedSize || ""
+                }`;
 
               return (
                 <div
-                  key={`${item?.id || item?.productId || "product"}-${item?.variantId || "default"}-${item?.selectedColor || ""}-${item?.selectedSize || ""}-${index}`}
+                  key={`${cartKey}-${index}`}
                   className="group rounded-2xl border border-gray-200 bg-white p-4 transition-all duration-200 hover:border-gray-300 sm:p-5"
                 >
 
@@ -260,25 +289,19 @@ const CartPage = () => {
                         <div className="min-w-0">
 
                           <h2 className="line-clamp-2 text-sm font-semibold leading-5 text-gray-900 sm:text-base">
-
                             {productName}
-
                           </h2>
 
                           {item?.brand && (
-
                             <p className="mt-1 text-xs text-gray-400">
                               {item.brand}
                             </p>
-
                           )}
 
                           {item?.category && (
-
                             <p className="mt-0.5 text-xs text-gray-400">
                               {item.category}
                             </p>
-
                           )}
 
                         </div>
@@ -289,9 +312,7 @@ const CartPage = () => {
                           type="button"
                           onClick={() =>
                             dispatch(
-                              removeCart(
-                                item.id
-                              )
+                              removeFromCart(item)
                             )
                           }
                           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 transition hover:bg-red-50 hover:text-red-500"
@@ -303,11 +324,12 @@ const CartPage = () => {
                       </div>
 
                       {/* =====================================
-                          VARIANTS
+                          VARIANT INFORMATION
                       ===================================== */}
 
                       {(item?.selectedColor ||
-                        item?.selectedSize) && (
+                        item?.selectedSize ||
+                        item?.variantId) && (
 
                         <div className="mt-3 flex flex-wrap gap-2">
 
@@ -330,9 +352,7 @@ const CartPage = () => {
                               )}
 
                               <span className="text-[11px] font-medium text-gray-600">
-
                                 {item.selectedColor}
-
                               </span>
 
                             </div>
@@ -346,11 +366,8 @@ const CartPage = () => {
                             <div className="rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5">
 
                               <span className="text-[11px] font-medium text-gray-600">
-
                                 Size:{" "}
-
                                 {item.selectedSize}
-
                               </span>
 
                             </div>
@@ -358,7 +375,6 @@ const CartPage = () => {
                           )}
 
                         </div>
-
                       )}
 
                       {/* =====================================
@@ -368,10 +384,8 @@ const CartPage = () => {
                       <div className="mt-3 flex items-center gap-3">
 
                         <span className="text-base font-bold text-gray-900">
-
                           ৳
                           {price.toLocaleString()}
-
                         </span>
 
                         {item?.oldPrice &&
@@ -379,12 +393,10 @@ const CartPage = () => {
                             price && (
 
                             <span className="text-xs text-gray-400 line-through">
-
                               ৳
                               {Number(
                                 item.oldPrice
                               ).toLocaleString()}
-
                             </span>
 
                           )}
@@ -405,20 +417,14 @@ const CartPage = () => {
                             type="button"
                             onClick={() =>
                               dispatch(
-                                decreaseQuantity(
-                                  item.id
-                                )
+                                decreaseQuantity(item)
                               )
                             }
-                            disabled={
-                              quantity <= 1
-                            }
+                            disabled={quantity <= 1}
                             className="flex h-9 w-9 items-center justify-center text-gray-500 transition hover:bg-gray-50 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-30"
                             aria-label="Decrease quantity"
                           >
-
                             <FiMinus size={14} />
-
                           </button>
 
                           <span className="min-w-[30px] text-center text-sm font-semibold">
@@ -429,17 +435,13 @@ const CartPage = () => {
                             type="button"
                             onClick={() =>
                               dispatch(
-                                increaseQuantity(
-                                  item.id
-                                )
+                                increaseQuantity(item)
                               )
                             }
                             className="flex h-9 w-9 items-center justify-center text-gray-500 transition hover:bg-gray-50 hover:text-gray-900"
                             aria-label="Increase quantity"
                           >
-
                             <FiPlus size={14} />
-
                           </button>
 
                         </div>
@@ -453,10 +455,8 @@ const CartPage = () => {
                           </p>
 
                           <p className="mt-0.5 text-sm font-bold text-gray-900">
-
                             ৳
                             {itemSubtotal.toLocaleString()}
-
                           </p>
 
                         </div>
@@ -480,13 +480,11 @@ const CartPage = () => {
               onClick={handleContinueShopping}
               className="mt-2 inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-gray-900"
             >
-
               <span className="text-lg">
                 ←
               </span>
 
               Continue Shopping
-
             </button>
 
           </div>
@@ -543,10 +541,8 @@ const CartPage = () => {
                     </span>
 
                     <span className="text-sm font-medium">
-
                       ৳
                       {subtotal.toLocaleString()}
-
                     </span>
 
                   </div>
@@ -580,10 +576,8 @@ const CartPage = () => {
                       </p>
 
                       <p className="mt-1 text-3xl font-bold tracking-tight">
-
                         ৳
                         {subtotal.toLocaleString()}
-
                       </p>
 
                     </div>
@@ -603,11 +597,9 @@ const CartPage = () => {
                   onClick={handleCheckout}
                   className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-4 text-sm font-bold text-gray-900 transition-all duration-200 hover:bg-gray-100 active:scale-[0.98]"
                 >
-
                   Go to Checkout
 
                   <FiArrowRight size={17} />
-
                 </button>
 
                 {/* SECURE */}
@@ -635,9 +627,7 @@ const CartPage = () => {
                   <div className="flex items-center gap-3">
 
                     <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10">
-
                       <FiTruck size={15} />
-
                     </div>
 
                     <div>
@@ -659,9 +649,7 @@ const CartPage = () => {
                   <div className="flex items-center gap-3">
 
                     <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10">
-
                       <FiPackage size={15} />
-
                     </div>
 
                     <div>

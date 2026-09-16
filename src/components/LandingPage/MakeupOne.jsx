@@ -1,5 +1,4 @@
-
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
   FiCheck,
@@ -16,25 +15,102 @@ import {
 
 import { districtData } from "../DistrictData/DistrictData";
 
+// ======================================================
+// API CONFIG
+// ======================================================
+
+const RAW_API_URL =
+  import.meta.env.VITE_API_URL ||
+  "https://ourbackend.spriengge.shop/api";
+
+const API_URL = RAW_API_URL
+  .trim()
+  .replace(/\/+$/, "")
+  .replace(/\/products$/, "")
+  .replace(/\/orders$/, "");
+
+// ======================================================
+// HELPERS
+// ======================================================
+
+const normalizeProductId = (value) => {
+  const numberValue = Number(value);
+
+  return Number.isFinite(numberValue) && numberValue > 0
+    ? numberValue
+    : null;
+};
+
+const cleanString = (value) => {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  return String(value).trim();
+};
+
+const getProductImage = (product) => {
+  return (
+    product?.image ||
+    product?.images?.[0] ||
+    product?.variants?.[0]?.images?.[0] ||
+    ""
+  );
+};
+
+const getProductPrice = (product) => {
+  const price = Number(product?.price);
+
+  return Number.isFinite(price) && price >= 0 ? price : 0;
+};
+
+const getProductOldPrice = (product, price) => {
+  const oldPrice = Number(product?.oldPrice);
+
+  if (Number.isFinite(oldPrice) && oldPrice > price) {
+    return oldPrice;
+  }
+
+  return price + 300;
+};
+
+const getProductDiscount = (product, price, oldPrice) => {
+  const productDiscount = Number(product?.discount);
+
+  if (
+    Number.isFinite(productDiscount) &&
+    productDiscount > 0
+  ) {
+    return productDiscount;
+  }
+
+  return Math.max(oldPrice - price, 0);
+};
+
+// ======================================================
+// COMPONENT
+// ======================================================
+
 const MakeupOne = () => {
   const { id } = useParams();
 
-  // ==========================================
+  // ======================================================
   // PRODUCT STATE
-  // ==========================================
+  // ======================================================
 
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [productError, setProductError] = useState("");
 
-  // ==========================================
+  // ======================================================
   // QUANTITY
-  // ==========================================
+  // ======================================================
 
   const [quantity, setQuantity] = useState(1);
 
-  // ==========================================
+  // ======================================================
   // FORM
-  // ==========================================
+  // ======================================================
 
   const [formData, setFormData] = useState({
     name: "",
@@ -45,16 +121,17 @@ const MakeupOne = () => {
     note: "",
   });
 
-  // ==========================================
+  // ======================================================
   // ORDER STATE
-  // ==========================================
+  // ======================================================
 
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [successOrder, setSuccessOrder] = useState(null);
 
-  // ==========================================
+  // ======================================================
   // COUNTDOWN
-  // ==========================================
+  // ======================================================
 
   const [timeLeft, setTimeLeft] = useState({
     hours: 1,
@@ -62,39 +139,103 @@ const MakeupOne = () => {
     seconds: 59,
   });
 
-  // ==========================================
+  // ======================================================
   // LOAD PRODUCT
-  // ==========================================
+  // ======================================================
 
   useEffect(() => {
+    let cancelled = false;
+
     const loadProduct = async () => {
       try {
-        const response = await fetch("/ProductData.json");
+        setLoading(true);
+        setProductError("");
+        setProduct(null);
 
-        if (!response.ok) {
-          throw new Error("ProductData.json not found");
+        const productId = normalizeProductId(id);
+
+        if (!productId) {
+          throw new Error("Invalid product ID.");
         }
 
-        const data = await response.json();
-
-        const selectedProduct = data.find(
-          (item) => Number(item.id) === Number(id)
+        const response = await fetch(
+          `${API_URL}/products/${encodeURIComponent(productId)}`
         );
 
-        setProduct(selectedProduct);
+        let data = null;
+
+        try {
+          data = await response.json();
+        } catch {
+          data = null;
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            data?.message ||
+              data?.error ||
+              `Product request failed with status ${response.status}`
+          );
+        }
+
+        const loadedProduct =
+          data?.product ||
+          data?.data ||
+          data;
+
+        if (!loadedProduct) {
+          throw new Error("Product not found.");
+        }
+
+        const loadedProductId = normalizeProductId(
+          loadedProduct?.productId ??
+            loadedProduct?.id
+        );
+
+        if (!loadedProductId) {
+          throw new Error(
+            "Product response does not contain a valid productId."
+          );
+        }
+
+        const normalizedProduct = {
+          ...loadedProduct,
+          productId: loadedProductId,
+          image: getProductImage(loadedProduct),
+        };
+
+        if (!cancelled) {
+          setProduct(normalizedProduct);
+        }
       } catch (error) {
-        console.error("Product loading error:", error);
+        console.error(
+          "Landing product loading error:",
+          error
+        );
+
+        if (!cancelled) {
+          setProductError(
+            error?.message ||
+              "Unable to load this product."
+          );
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     loadProduct();
+
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
-  // ==========================================
+  // ======================================================
   // COUNTDOWN
-  // ==========================================
+  // ======================================================
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -102,19 +243,21 @@ const MakeupOne = () => {
         let { hours, minutes, seconds } = prev;
 
         if (seconds > 0) {
-          seconds--;
+          seconds -= 1;
         } else {
           seconds = 59;
 
           if (minutes > 0) {
-            minutes--;
+            minutes -= 1;
           } else {
             minutes = 59;
 
             if (hours > 0) {
-              hours--;
+              hours -= 1;
             } else {
               hours = 1;
+              minutes = 59;
+              seconds = 59;
             }
           }
         }
@@ -130,62 +273,47 @@ const MakeupOne = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // ==========================================
-  // LOADING
-  // ==========================================
+  // ======================================================
+  // PRODUCT INFORMATION
+  // ======================================================
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f7f7f5]">
-        <div className="w-8 h-8 border-[3px] border-gray-200 border-t-black rounded-full animate-spin" />
-      </div>
+  const price = useMemo(() => {
+    return getProductPrice(product);
+  }, [product]);
+
+  const oldPrice = useMemo(() => {
+    return getProductOldPrice(product, price);
+  }, [product, price]);
+
+  const discount = useMemo(() => {
+    return getProductDiscount(
+      product,
+      price,
+      oldPrice
     );
-  }
+  }, [product, price, oldPrice]);
 
-  // ==========================================
-  // PRODUCT NOT FOUND
-  // ==========================================
+  const productImage = useMemo(() => {
+    return getProductImage(product);
+  }, [product]);
 
-  if (!product) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#f7f7f5] px-5 text-center">
-        <h1 className="text-3xl font-black">
-          Product Not Found
-        </h1>
+  const productStock = useMemo(() => {
+    const stock = Number(product?.stock);
 
-        <p className="mt-3 text-gray-500">
-          Sorry, this product is currently unavailable.
-        </p>
+    if (Number.isFinite(stock) && stock >= 0) {
+      return stock;
+    }
 
-        <a
-          href="/"
-          className="mt-6 px-6 py-3 rounded-full bg-black text-white font-semibold"
-        >
-          Back to Home
-        </a>
-      </div>
-    );
-  }
+    return null;
+  }, [product]);
 
-  // ==========================================
-  // PRICE
-  // ==========================================
-
-  const price = Number(product.price) || 0;
-
-  const oldPrice =
-    Number(product.oldPrice) || price + 300;
-
-  const discount =
-    Number(product.discount) ||
-    Math.max(oldPrice - price, 0);
-
-  // ==========================================
+  // ======================================================
   // DELIVERY
-  // ==========================================
+  // ======================================================
 
   const isDhaka =
-    formData.district.trim().toLowerCase() === "dhaka";
+    cleanString(formData.district).toLowerCase() ===
+    "dhaka";
 
   const deliveryCharge = formData.district
     ? isDhaka
@@ -193,17 +321,22 @@ const MakeupOne = () => {
       : 100
     : 0;
 
-  // ==========================================
+  // ======================================================
   // TOTAL
-  // ==========================================
+  // ======================================================
 
-  const subtotal = price * quantity;
+  const safeQuantity = Math.max(
+    1,
+    Math.floor(Number(quantity) || 1)
+  );
+
+  const subtotal = price * safeQuantity;
 
   const total = subtotal + deliveryCharge;
 
-  // ==========================================
+  // ======================================================
   // INPUT CHANGE
-  // ==========================================
+  // ======================================================
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -214,12 +347,14 @@ const MakeupOne = () => {
     }));
   };
 
-  // ==========================================
+  // ======================================================
   // PHONE CHANGE
-  // ==========================================
+  // ======================================================
 
   const handlePhoneChange = (e) => {
-    const value = e.target.value.replace(/\D/g, "");
+    const value = e.target.value
+      .replace(/\D/g, "")
+      .slice(0, 11);
 
     setFormData((prev) => ({
       ...prev,
@@ -227,9 +362,9 @@ const MakeupOne = () => {
     }));
   };
 
-  // ==========================================
+  // ======================================================
   // DISTRICT CHANGE
-  // ==========================================
+  // ======================================================
 
   const handleDistrictChange = (e) => {
     setFormData((prev) => ({
@@ -239,155 +374,323 @@ const MakeupOne = () => {
     }));
   };
 
-  // ==========================================
+  // ======================================================
   // QUANTITY
-  // ==========================================
+  // ======================================================
 
   const increaseQuantity = () => {
-    setQuantity((prev) => prev + 1);
+    setQuantity((prev) => {
+      const current = Math.max(
+        1,
+        Math.floor(Number(prev) || 1)
+      );
+
+      if (
+        productStock !== null &&
+        productStock > 0 &&
+        current >= productStock
+      ) {
+        return current;
+      }
+
+      return current + 1;
+    });
   };
 
   const decreaseQuantity = () => {
-    setQuantity((prev) =>
-      prev > 1 ? prev - 1 : 1
-    );
+    setQuantity((prev) => {
+      const current = Math.max(
+        1,
+        Math.floor(Number(prev) || 1)
+      );
+
+      return current > 1 ? current - 1 : 1;
+    });
   };
 
-  // ==========================================
+  // ======================================================
   // SUBMIT ORDER
-  // ==========================================
+  // ======================================================
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // ------------------------------
-    // NAME
-    // ------------------------------
+    if (submitting) {
+      return;
+    }
 
-    if (!formData.name.trim()) {
+    // ----------------------------------------------------
+    // PRODUCT SAFETY
+    // ----------------------------------------------------
+
+    if (!product) {
+      alert("Product not found.");
+      return;
+    }
+
+    const productId = normalizeProductId(
+      product?.productId ??
+        product?.id
+    );
+
+    if (!productId) {
+      alert("Invalid product ID.");
+      return;
+    }
+
+    // ----------------------------------------------------
+    // NAME
+    // ----------------------------------------------------
+
+    const customerName =
+      cleanString(formData.name);
+
+    if (!customerName) {
       alert("Please enter your name.");
       return;
     }
 
-    // ------------------------------
+    // ----------------------------------------------------
     // PHONE
-    // ------------------------------
+    // ----------------------------------------------------
 
-    if (!/^01\d{9}$/.test(formData.phone)) {
+    const customerPhone =
+      cleanString(formData.phone);
+
+    if (!/^01\d{9}$/.test(customerPhone)) {
       alert(
         "Please enter a valid 11 digit Bangladeshi phone number."
       );
       return;
     }
 
-    // ------------------------------
+    // ----------------------------------------------------
     // DISTRICT
-    // ------------------------------
+    // ----------------------------------------------------
 
-    if (!formData.district) {
+    const customerDistrict =
+      cleanString(formData.district);
+
+    if (!customerDistrict) {
       alert("Please select your district.");
       return;
     }
 
-    // ------------------------------
+    // ----------------------------------------------------
     // THANA
-    // ------------------------------
+    // ----------------------------------------------------
 
-    if (!formData.thana) {
+    const customerThana =
+      cleanString(formData.thana);
+
+    if (!customerThana) {
       alert("Please select your thana.");
       return;
     }
 
-    // ------------------------------
+    // ----------------------------------------------------
     // ADDRESS
-    // ------------------------------
+    // ----------------------------------------------------
 
-    if (!formData.address.trim()) {
+    const customerAddress =
+      cleanString(formData.address);
+
+    if (!customerAddress) {
       alert("Please enter your delivery address.");
       return;
     }
 
-    // ------------------------------
-    // QUANTITY SAFETY
-    // ------------------------------
+    // ----------------------------------------------------
+    // QUANTITY
+    // ----------------------------------------------------
 
     const finalQuantity = Math.max(
       1,
-      Number(quantity)
+      Math.floor(Number(quantity) || 1)
     );
 
-    // ------------------------------
-    // CALCULATE AGAIN
-    // ------------------------------
+    // ----------------------------------------------------
+    // STOCK CHECK
+    // ----------------------------------------------------
 
-    const finalSubtotal =
-      price * finalQuantity;
+    if (
+      productStock !== null &&
+      productStock <= 0
+    ) {
+      alert("Sorry, this product is currently out of stock.");
+      return;
+    }
+
+    if (
+      productStock !== null &&
+      finalQuantity > productStock
+    ) {
+      alert(
+        `Only ${productStock} item${
+          productStock > 1 ? "s" : ""
+        } available in stock.`
+      );
+
+      setQuantity(productStock);
+      return;
+    }
+
+    // ----------------------------------------------------
+    // PRICE
+    // ----------------------------------------------------
+
+    const finalPrice = getProductPrice(product);
+
+    if (
+      !Number.isFinite(finalPrice) ||
+      finalPrice < 0
+    ) {
+      alert("Invalid product price.");
+      return;
+    }
+
+    // ----------------------------------------------------
+    // DELIVERY
+    // ----------------------------------------------------
 
     const finalDeliveryCharge =
-      formData.district.toLowerCase() === "dhaka"
+      customerDistrict.toLowerCase() ===
+      "dhaka"
         ? 60
         : 100;
+
+    // ----------------------------------------------------
+    // TOTAL
+    // ----------------------------------------------------
+
+    const finalSubtotal =
+      finalPrice * finalQuantity;
 
     const finalTotal =
       finalSubtotal + finalDeliveryCharge;
 
-    // ==========================================
-    // IMPORTANT:
-    // ONE REQUEST = ONE ORDER
-    // quantity = 2 means 2 products in that order
-    // ==========================================
+    // ====================================================
+    // CANONICAL ORDER ITEM
+    // ====================================================
 
-    const orderData = {
-      // Customer
-      name: formData.name.trim(),
-      phone: formData.phone,
-      district: formData.district,
-      thana: formData.thana,
-      address: formData.address.trim(),
-      note: formData.note.trim(),
+    const orderItem = {
+      productId,
 
-      // Product
-      productId: product.id,
-      productName: product.name,
-      productImage: product.image,
+      productName:
+        cleanString(product?.name) ||
+        "Product",
 
-      // Quantity
+      productImage:
+        productImage || "",
+
+      // Landing page product has no selected variant.
+      // Keep canonical variantId empty.
+      variantId: "",
+
+      selectedColor: "",
+      selectedColorCode: "",
+      selectedSize: "",
+
+      price: finalPrice,
+
       quantity: finalQuantity,
 
-      // Price
-      price: price,
       subtotal: finalSubtotal,
-
-      // Delivery
-      deliveryCharge: finalDeliveryCharge,
-
-      // Final total
-      total: finalTotal,
-
-      // Items array
-      items: [
-        {
-          productId: product.id,
-          productName: product.name,
-          productImage: product.image,
-          price: price,
-          quantity: finalQuantity,
-          subtotal: finalSubtotal,
-        },
-      ],
-
-      // Source
-      orderSource: "landing-page",
-      landingPageId: id,
     };
 
-    console.log("FINAL LANDING ORDER:", orderData);
+    // ====================================================
+    // FINAL ORDER PAYLOAD
+    // ====================================================
+
+    const orderData = {
+      // --------------------------------------------------
+      // CUSTOMER
+      // --------------------------------------------------
+
+      name: customerName,
+
+      phone: customerPhone,
+
+      district: customerDistrict,
+
+      thana: customerThana,
+
+      address: customerAddress,
+
+      note: cleanString(formData.note),
+
+      // --------------------------------------------------
+      // PRODUCT
+      // --------------------------------------------------
+
+      productId,
+
+      productName:
+        cleanString(product?.name) ||
+        "Product",
+
+      productImage:
+        productImage || "",
+
+      // --------------------------------------------------
+      // QUANTITY
+      // --------------------------------------------------
+
+      quantity: finalQuantity,
+
+      // --------------------------------------------------
+      // PRICE
+      // --------------------------------------------------
+
+      price: finalPrice,
+
+      subtotal: finalSubtotal,
+
+      // --------------------------------------------------
+      // DELIVERY
+      // --------------------------------------------------
+
+      deliveryCharge: finalDeliveryCharge,
+
+      // --------------------------------------------------
+      // TOTAL
+      // --------------------------------------------------
+
+      total: finalTotal,
+
+      // --------------------------------------------------
+      // ITEMS
+      // --------------------------------------------------
+
+      items: [orderItem],
+
+      // --------------------------------------------------
+      // ORDER SOURCE
+      // --------------------------------------------------
+
+      orderSource: "landing-page",
+
+      landingPageId: cleanString(id),
+
+      paymentMethod: "cod",
+
+      status: "pending",
+    };
+
+    console.log(
+      "FINAL LANDING ORDER:",
+      orderData
+    );
+
+    // ====================================================
+    // SEND ORDER
+    // ====================================================
 
     try {
       setSubmitting(true);
 
       const response = await fetch(
-        "https://sprienge-backend.onrender.com/api/orders",
+        `${API_URL}/orders`,
         {
           method: "POST",
 
@@ -399,21 +702,39 @@ const MakeupOne = () => {
         }
       );
 
-      const data = await response.json();
+      let data = null;
 
-      console.log("ORDER RESPONSE:", data);
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
+
+      console.log(
+        "LANDING ORDER RESPONSE:",
+        data
+      );
 
       if (!response.ok) {
         throw new Error(
           data?.message ||
             data?.error ||
-            "Order failed"
+            "Order failed. Please try again."
         );
       }
 
-      // ==========================================
+      // ==================================================
       // SUCCESS
-      // ==========================================
+      // ==================================================
+
+      setSuccessOrder({
+        ...orderData,
+        orderId:
+          data?.order?._id ||
+          data?.data?._id ||
+          data?._id ||
+          "",
+      });
 
       setSuccess(true);
 
@@ -428,10 +749,13 @@ const MakeupOne = () => {
 
       setQuantity(1);
     } catch (error) {
-      console.error("Order submit error:", error);
+      console.error(
+        "Landing order submit error:",
+        error
+      );
 
       alert(
-        error.message ||
+        error?.message ||
           "Something went wrong. Please try again."
       );
     } finally {
@@ -439,9 +763,57 @@ const MakeupOne = () => {
     }
   };
 
-  // ==========================================
+  // ======================================================
+  // LOADING
+  // ======================================================
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f7f7f5]">
+        <div className="flex flex-col items-center">
+          <div className="w-8 h-8 border-[3px] border-gray-200 border-t-black rounded-full animate-spin" />
+
+          <p className="mt-4 text-xs text-gray-400 font-medium">
+            Loading product...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ======================================================
+  // PRODUCT NOT FOUND
+  // ======================================================
+
+  if (!product) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#f7f7f5] px-5 text-center">
+        <div className="w-16 h-16 rounded-full bg-red-50 text-red-500 flex items-center justify-center">
+          <FiX size={28} />
+        </div>
+
+        <h1 className="mt-5 text-3xl font-black">
+          Product Not Found
+        </h1>
+
+        <p className="mt-3 text-gray-500 max-w-md">
+          {productError ||
+            "Sorry, this product is currently unavailable."}
+        </p>
+
+        <a
+          href="/"
+          className="mt-6 px-6 py-3 rounded-full bg-black text-white font-semibold"
+        >
+          Back to Home
+        </a>
+      </div>
+    );
+  }
+
+  // ======================================================
   // UI
-  // ==========================================
+  // ======================================================
 
   return (
     <div className="min-h-screen bg-[#f7f7f5] text-gray-900">
@@ -504,9 +876,17 @@ const MakeupOne = () => {
 
                   <FiClock />
 
-                  {String(timeLeft.hours).padStart(2, "0")}:
-                  {String(timeLeft.minutes).padStart(2, "0")}:
-                  {String(timeLeft.seconds).padStart(2, "0")}
+                  {String(
+                    timeLeft.hours
+                  ).padStart(2, "0")}
+                  :
+                  {String(
+                    timeLeft.minutes
+                  ).padStart(2, "0")}
+                  :
+                  {String(
+                    timeLeft.seconds
+                  ).padStart(2, "0")}
 
                 </div>
 
@@ -524,11 +904,17 @@ const MakeupOne = () => {
                     SAVE ৳{discount}
                   </div>
 
-                  <img
-                    src={product.image}
-                    alt={product.name}
-                    className="w-full h-[250px] sm:h-[310px] lg:h-[350px] object-contain"
-                  />
+                  {productImage ? (
+                    <img
+                      src={productImage}
+                      alt={product.name}
+                      className="w-full h-[250px] sm:h-[310px] lg:h-[350px] object-contain"
+                    />
+                  ) : (
+                    <div className="w-full h-[250px] sm:h-[310px] lg:h-[350px] flex items-center justify-center text-gray-300">
+                      No Image
+                    </div>
+                  )}
 
                 </div>
 
@@ -555,11 +941,15 @@ const MakeupOne = () => {
                   </div>
 
                   <span className="text-xs font-bold">
-                    4.9
+                    {Number(product.rating) ||
+                      "4.9"}
                   </span>
 
                   <span className="text-xs text-gray-400">
-                    • 500+ happy customers
+                    •{" "}
+                    {Number(product.reviews) ||
+                      "500+"}{" "}
+                    happy customers
                   </span>
 
                 </div>
@@ -569,7 +959,9 @@ const MakeupOne = () => {
                 </h1>
 
                 <p className="mt-3 text-sm sm:text-base text-gray-500 leading-relaxed max-w-xl">
-                  {product.description ||
+                  {product?.details
+                    ?.shortDescription ||
+                    product.description ||
                     "Premium quality product designed for comfort, style and everyday use."}
                 </p>
 
@@ -579,9 +971,11 @@ const MakeupOne = () => {
                     ৳{price}
                   </span>
 
-                  <span className="text-base text-gray-400 line-through">
-                    ৳{oldPrice}
-                  </span>
+                  {oldPrice > price && (
+                    <span className="text-base text-gray-400 line-through">
+                      ৳{oldPrice}
+                    </span>
+                  )}
 
                   <span className="bg-green-100 text-green-700 px-2.5 py-1 rounded-full text-[10px] font-bold">
                     SAVE ৳{discount}
@@ -597,6 +991,20 @@ const MakeupOne = () => {
                   <Benefit text="Easy Support" />
 
                 </div>
+
+                {productStock !== null && (
+                  <div className="mt-4 text-xs font-semibold">
+                    {productStock > 0 ? (
+                      <span className="text-green-600">
+                        {productStock} items available
+                      </span>
+                    ) : (
+                      <span className="text-red-500">
+                        Out of stock
+                      </span>
+                    )}
+                  </div>
+                )}
 
               </div>
 
@@ -797,19 +1205,23 @@ const MakeupOne = () => {
 
                   </div>
 
-                  {/* =================================
-                      PRODUCT + QUANTITY
-                  ================================= */}
+                  {/* PRODUCT + QUANTITY */}
 
                   <div className="mt-4 p-4 bg-gray-50 rounded-2xl">
 
                     <div className="flex items-center gap-3">
 
-                      <img
-                        src={product.image}
-                        alt={product.name}
-                        className="w-14 h-14 rounded-xl bg-white object-contain border border-gray-100"
-                      />
+                      {productImage ? (
+                        <img
+                          src={productImage}
+                          alt={product.name}
+                          className="w-14 h-14 rounded-xl bg-white object-contain border border-gray-100"
+                        />
+                      ) : (
+                        <div className="w-14 h-14 rounded-xl bg-white border border-gray-100 flex items-center justify-center text-gray-300 text-xs">
+                          N/A
+                        </div>
+                      )}
 
                       <div className="flex-1 min-w-0">
 
@@ -818,7 +1230,7 @@ const MakeupOne = () => {
                         </h3>
 
                         <p className="text-xs text-gray-400 mt-1">
-                          ৳{price} × {quantity}
+                          ৳{price} × {safeQuantity}
                         </p>
 
                       </div>
@@ -830,19 +1242,26 @@ const MakeupOne = () => {
                         <button
                           type="button"
                           onClick={decreaseQuantity}
-                          className="w-9 h-9 flex items-center justify-center hover:bg-gray-100"
+                          disabled={safeQuantity <= 1}
+                          className="w-9 h-9 flex items-center justify-center hover:bg-gray-100 disabled:opacity-40"
                         >
                           <FiMinus size={13} />
                         </button>
 
                         <span className="w-8 text-center text-sm font-black">
-                          {quantity}
+                          {safeQuantity}
                         </span>
 
                         <button
                           type="button"
                           onClick={increaseQuantity}
-                          className="w-9 h-9 flex items-center justify-center hover:bg-gray-100"
+                          disabled={
+                            productStock !== null &&
+                            productStock > 0 &&
+                            safeQuantity >=
+                              productStock
+                          }
+                          className="w-9 h-9 flex items-center justify-center hover:bg-gray-100 disabled:opacity-40"
                         >
                           <FiPlus size={13} />
                         </button>
@@ -853,9 +1272,7 @@ const MakeupOne = () => {
 
                   </div>
 
-                  {/* =================================
-                      DELIVERY
-                  ================================= */}
+                  {/* DELIVERY */}
 
                   <div className="mt-3 p-4 border border-gray-100 rounded-2xl">
 
@@ -924,23 +1341,25 @@ const MakeupOne = () => {
 
                   </div>
 
-                  {/* =================================
-                      ORDER SUMMARY
-                  ================================= */}
+                  {/* ORDER SUMMARY */}
 
                   <div className="mt-3 p-4 bg-gray-50 rounded-2xl space-y-2">
 
                     <div className="flex justify-between text-xs text-gray-500">
+
                       <span>
-                        Product ({quantity} × ৳{price})
+                        Product ({safeQuantity} × ৳
+                        {price})
                       </span>
 
                       <span>
                         ৳{subtotal}
                       </span>
+
                     </div>
 
                     <div className="flex justify-between text-xs text-gray-500">
+
                       <span>
                         Delivery
                       </span>
@@ -950,6 +1369,7 @@ const MakeupOne = () => {
                           ? `৳${deliveryCharge}`
                           : "—"}
                       </span>
+
                     </div>
 
                     <div className="pt-2 border-t border-gray-200 flex justify-between items-center">
@@ -966,24 +1386,33 @@ const MakeupOne = () => {
 
                   </div>
 
-                  {/* =================================
-                      SUBMIT
-                  ================================= */}
+                  {/* SUBMIT */}
 
                   <button
                     type="submit"
-                    disabled={submitting}
+                    disabled={
+                      submitting ||
+                      (productStock !== null &&
+                        productStock <= 0)
+                    }
                     className="mt-4 w-full py-3.5 rounded-2xl bg-black hover:bg-blue-600 disabled:bg-gray-400 text-white font-bold flex items-center justify-center gap-2 transition-all duration-300"
                   >
 
                     {submitting ? (
                       <>
                         <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+
                         Processing...
+                      </>
+                    ) : productStock !== null &&
+                      productStock <= 0 ? (
+                      <>
+                        Out of Stock
                       </>
                     ) : (
                       <>
                         Confirm Order — ৳{total}
+
                         <FiArrowRight />
                       </>
                     )}
@@ -1034,8 +1463,11 @@ const MakeupOne = () => {
 
             <button
               type="button"
-              onClick={() => setSuccess(false)}
-              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"
+              onClick={() => {
+                setSuccess(false);
+                setSuccessOrder(null);
+              }}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200"
             >
               <FiX size={15} />
             </button>
@@ -1053,6 +1485,18 @@ const MakeupOne = () => {
               আমাদের টিম খুব শীঘ্রই আপনার সাথে যোগাযোগ করবে।
             </p>
 
+            {successOrder?.orderId && (
+              <div className="mt-4 px-4 py-2 rounded-xl bg-green-50">
+                <p className="text-[10px] text-gray-400">
+                  Order ID
+                </p>
+
+                <p className="text-xs font-bold break-all">
+                  {successOrder.orderId}
+                </p>
+              </div>
+            )}
+
             <div className="mt-5 p-4 rounded-2xl bg-gray-50">
 
               <p className="text-xs text-gray-400">
@@ -1060,7 +1504,9 @@ const MakeupOne = () => {
               </p>
 
               <p className="text-xl font-black">
-                {quantity} × {product.name}
+                {successOrder?.quantity ||
+                  safeQuantity}{" "}
+                × {product.name}
               </p>
 
               <p className="text-xs text-gray-400 mt-2">
@@ -1068,15 +1514,20 @@ const MakeupOne = () => {
               </p>
 
               <p className="text-2xl font-black">
-                ৳{total}
+                ৳
+                {successOrder?.total ||
+                  total}
               </p>
 
             </div>
 
             <button
               type="button"
-              onClick={() => setSuccess(false)}
-              className="mt-5 w-full h-12 rounded-xl bg-black text-white font-bold"
+              onClick={() => {
+                setSuccess(false);
+                setSuccessOrder(null);
+              }}
+              className="mt-5 w-full h-12 rounded-xl bg-black text-white font-bold hover:bg-blue-600 transition"
             >
               Done
             </button>
@@ -1090,10 +1541,9 @@ const MakeupOne = () => {
   );
 };
 
-
-// ==========================================
+// ======================================================
 // BENEFIT
-// ==========================================
+// ======================================================
 
 const Benefit = ({ text }) => {
   return (

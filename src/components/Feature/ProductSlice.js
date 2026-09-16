@@ -1,5 +1,11 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 
+/*
+|--------------------------------------------------------------------------
+| API URL
+|--------------------------------------------------------------------------
+*/
+
 const RAW_API_URL =
   import.meta.env.VITE_API_URL ||
   "https://ourbackend.spriengge.shop/api";
@@ -16,68 +22,254 @@ const API_URL = RAW_API_URL
 |--------------------------------------------------------------------------
 */
 
+const toSafeNumber = (value, fallback = 0) => {
+  const numberValue = Number(value);
+
+  return Number.isFinite(numberValue)
+    ? numberValue
+    : fallback;
+};
+
+const toSafeInteger = (value, fallback = 0) => {
+  const numberValue = Number(value);
+
+  return Number.isFinite(numberValue)
+    ? Math.max(0, Math.floor(numberValue))
+    : fallback;
+};
+
+const cleanString = (value) => {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  return String(value).trim();
+};
+
+/*
+|--------------------------------------------------------------------------
+| Normalize Size
+|--------------------------------------------------------------------------
+*/
+
 const normalizeSize = (size) => {
-  if (!size) return null;
+  if (!size || typeof size !== "object") {
+    return null;
+  }
+
+  const sizeName = cleanString(size.size);
+
+  if (!sizeName) {
+    return null;
+  }
 
   return {
-    size: String(size.size ?? "").trim(),
-    stock: Math.max(0, Number(size.stock || 0)),
+    size: sizeName,
+    stock: toSafeInteger(size.stock),
   };
 };
 
+/*
+|--------------------------------------------------------------------------
+| Normalize Variant
+|--------------------------------------------------------------------------
+| Backend canonical variant identity:
+|
+| variantId
+|
+| Do not use:
+| - variant.id
+| - variant.productId
+| - variant._id
+|--------------------------------------------------------------------------
+*/
+
 const normalizeVariant = (variant) => {
-  if (!variant) return null;
+  if (!variant || typeof variant !== "object") {
+    return null;
+  }
+
+  const variantId = cleanString(
+    variant.variantId
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Invalid variant বাদ
+  |--------------------------------------------------------------------------
+  */
+
+  if (!variantId) {
+    return null;
+  }
+
+  const sizes = Array.isArray(variant.sizes)
+    ? variant.sizes
+        .map(normalizeSize)
+        .filter(Boolean)
+    : [];
 
   return {
+    variantId,
+
+    color: cleanString(variant.color),
+
+    colorCode: cleanString(
+      variant.colorCode
+    ),
+
+    price: Math.max(
+      0,
+      toSafeNumber(variant.price)
+    ),
+
+    oldPrice: Math.max(
+      0,
+      toSafeNumber(variant.oldPrice)
+    ),
+
+    stock: toSafeInteger(variant.stock),
+
+    images: Array.isArray(variant.images)
+      ? variant.images
+          .filter(Boolean)
+          .map(String)
+      : [],
+
+    sizes,
+  };
+};
+
+/*
+|--------------------------------------------------------------------------
+| Normalize Details
+|--------------------------------------------------------------------------
+*/
+
+const normalizeDetails = (details) => {
+  if (!details || typeof details !== "object") {
+    return {
+      shortDescription: "",
+      overview: "",
+      features: [],
+      specifications: {},
+      howToUse: [],
+      careInstructions: [],
+      whatsIncluded: [],
+      deliveryInfo: "",
+      returnPolicy: "",
+      warranty: "",
+    };
+  }
+
+  const specifications =
+    details.specifications &&
+    typeof details.specifications === "object"
+      ? details.specifications
+      : {};
+
+  return {
+    shortDescription: cleanString(
+      details.shortDescription
+    ),
+
+    overview: cleanString(
+      details.overview
+    ),
+
+    features: Array.isArray(details.features)
+      ? details.features
+          .filter(Boolean)
+          .map(String)
+      : [],
+
+    specifications,
+
+    howToUse: Array.isArray(details.howToUse)
+      ? details.howToUse
+          .filter(Boolean)
+          .map(String)
+      : [],
+
+    careInstructions: Array.isArray(
+      details.careInstructions
+    )
+      ? details.careInstructions
+          .filter(Boolean)
+          .map(String)
+      : [],
+
+    whatsIncluded: Array.isArray(
+      details.whatsIncluded
+    )
+      ? details.whatsIncluded
+          .filter(Boolean)
+          .map(String)
+      : [],
+
     /*
     |--------------------------------------------------------------------------
-    | IMPORTANT
-    |--------------------------------------------------------------------------
-    | Backend canonical variant ID = variantId
-    |
-    | Do NOT convert variantId into id/productId.
+    | Backend schema:
+    | deliveryInfo = String
     |--------------------------------------------------------------------------
     */
 
-    variantId: String(variant.variantId ?? "").trim(),
+    deliveryInfo:
+      typeof details.deliveryInfo === "string"
+        ? details.deliveryInfo.trim()
+        : "",
 
-    color: variant.color ?? "",
+    returnPolicy: cleanString(
+      details.returnPolicy
+    ),
 
-    colorCode: variant.colorCode ?? "",
-
-    price: Number(variant.price ?? 0),
-
-    oldPrice: Number(variant.oldPrice ?? 0),
-
-    stock: Math.max(0, Number(variant.stock || 0)),
-
-    images: Array.isArray(variant.images)
-      ? variant.images.filter(Boolean)
-      : [],
-
-    sizes: Array.isArray(variant.sizes)
-      ? variant.sizes
-          .map(normalizeSize)
-          .filter((size) => size?.size)
-      : [],
+    warranty: cleanString(
+      details.warranty
+    ),
   };
 };
 
-const normalizeProduct = (product) => {
-  if (!product) return null;
+/*
+|--------------------------------------------------------------------------
+| Normalize Product
+|--------------------------------------------------------------------------
+*/
 
-  const numericProductId =
+const normalizeProduct = (product) => {
+  if (!product || typeof product !== "object") {
+    return null;
+  }
+
+  const rawProductId =
     product.productId ??
     product.id ??
     null;
 
-  const variants = Array.isArray(product.variants)
+  const numericProductId = Number(
+    rawProductId
+  );
+
+  const validProductId =
+    Number.isInteger(numericProductId) &&
+    numericProductId > 0
+      ? numericProductId
+      : null;
+
+  const variants = Array.isArray(
+    product.variants
+  )
     ? product.variants
         .map(normalizeVariant)
-        .filter((variant) => variant?.variantId)
+        .filter(Boolean)
     : [];
 
   return {
+    /*
+    |--------------------------------------------------------------------------
+    | Original backend fields
+    |--------------------------------------------------------------------------
+    */
+
     ...product,
 
     /*
@@ -86,25 +278,15 @@ const normalizeProduct = (product) => {
     |--------------------------------------------------------------------------
     */
 
-    productId:
-      numericProductId !== null &&
-      numericProductId !== undefined &&
-      numericProductId !== ""
-        ? Number(numericProductId)
-        : null,
+    productId: validProductId,
 
     /*
     |--------------------------------------------------------------------------
-    | Backward UI compatibility
+    | Backward compatibility for old UI
     |--------------------------------------------------------------------------
     */
 
-    id:
-      numericProductId !== null &&
-      numericProductId !== undefined &&
-      numericProductId !== ""
-        ? Number(numericProductId)
-        : product.id,
+    id: validProductId,
 
     /*
     |--------------------------------------------------------------------------
@@ -116,42 +298,70 @@ const normalizeProduct = (product) => {
 
     /*
     |--------------------------------------------------------------------------
-    | Basic product fields
+    | Basic Information
     |--------------------------------------------------------------------------
     */
 
-    name: product.name ?? "",
+    name: cleanString(product.name),
 
-    brand: product.brand ?? "",
+    brand: cleanString(product.brand),
 
-    category: product.category ?? "",
+    category: cleanString(product.category),
 
-    price: Number(product.price ?? 0),
+    price: Math.max(
+      0,
+      toSafeNumber(product.price)
+    ),
 
-    oldPrice: Number(product.oldPrice ?? 0),
+    oldPrice: Math.max(
+      0,
+      toSafeNumber(product.oldPrice)
+    ),
 
-    discount: Number(product.discount ?? 0),
+    discount: Math.min(
+      100,
+      Math.max(
+        0,
+        toSafeNumber(product.discount)
+      )
+    ),
 
-    stock: Math.max(0, Number(product.stock || 0)),
+    stock: toSafeInteger(product.stock),
 
-    rating: Number(product.rating ?? 0),
+    rating: Math.min(
+      5,
+      Math.max(
+        0,
+        toSafeNumber(product.rating)
+      )
+    ),
 
-    reviews: Number(product.reviews ?? 0),
+    reviews: toSafeInteger(
+      product.reviews
+    ),
 
     isNew: Boolean(product.isNew),
 
-    isFeatured: Boolean(product.isFeatured),
+    isFeatured: Boolean(
+      product.isFeatured
+    ),
 
-    image: product.image ?? "",
+    image: cleanString(product.image),
 
     images: Array.isArray(product.images)
-      ? product.images.filter(Boolean)
+      ? product.images
+          .filter(Boolean)
+          .map(String)
       : [],
 
-    description: product.description ?? "",
+    description: cleanString(
+      product.description
+    ),
 
     tags: Array.isArray(product.tags)
       ? product.tags
+          .filter(Boolean)
+          .map(String)
       : [],
 
     /*
@@ -168,103 +378,47 @@ const normalizeProduct = (product) => {
     |--------------------------------------------------------------------------
     */
 
-    details:
-      product.details &&
-      typeof product.details === "object"
-        ? {
-            shortDescription:
-              product.details.shortDescription ?? "",
-
-            overview:
-              product.details.overview ?? "",
-
-            features: Array.isArray(
-              product.details.features
-            )
-              ? product.details.features
-              : [],
-
-            specifications:
-              product.details.specifications &&
-              typeof product.details.specifications ===
-                "object"
-                ? product.details.specifications
-                : {},
-
-            howToUse: Array.isArray(
-              product.details.howToUse
-            )
-              ? product.details.howToUse
-              : [],
-
-            careInstructions: Array.isArray(
-              product.details.careInstructions
-            )
-              ? product.details.careInstructions
-              : [],
-
-            whatsIncluded: Array.isArray(
-              product.details.whatsIncluded
-            )
-              ? product.details.whatsIncluded
-              : [],
-
-            /*
-            |--------------------------------------------------------------------------
-            | Backend schema অনুযায়ী deliveryInfo = STRING
-            |--------------------------------------------------------------------------
-            */
-
-            deliveryInfo:
-              typeof product.details.deliveryInfo ===
-              "string"
-                ? product.details.deliveryInfo
-                : "",
-
-            returnPolicy:
-              product.details.returnPolicy ?? "",
-
-            warranty:
-              product.details.warranty ?? "",
-          }
-        : {
-            shortDescription: "",
-            overview: "",
-            features: [],
-            specifications: {},
-            howToUse: [],
-            careInstructions: [],
-            whatsIncluded: [],
-            deliveryInfo: "",
-            returnPolicy: "",
-            warranty: "",
-          },
+    details: normalizeDetails(
+      product.details
+    ),
 
     /*
     |--------------------------------------------------------------------------
-    | Admin fields
+    | Admin Fields
     |--------------------------------------------------------------------------
     */
 
-    sku: product.sku ?? "",
+    sku: cleanString(product.sku),
 
-    barcode: product.barcode ?? "",
+    barcode: cleanString(
+      product.barcode
+    ),
 
-    costPrice: Number(product.costPrice ?? 0),
+    costPrice: Math.max(
+      0,
+      toSafeNumber(product.costPrice)
+    ),
 
-    supplier: product.supplier ?? "",
+    supplier: cleanString(
+      product.supplier
+    ),
 
-    tenantId: product.tenantId ?? "",
+    tenantId: cleanString(
+      product.tenantId
+    ),
   };
 };
 
 /*
 |--------------------------------------------------------------------------
-| Generic API request
+| Generic API Request
 |--------------------------------------------------------------------------
 */
 
-const request = async (endpoint, options = {}) => {
+const request = async (
+  endpoint,
+  options = {}
+) => {
   const cleanEndpoint = endpoint.startsWith("/")
     ? endpoint
     : `/${endpoint}`;
@@ -302,7 +456,7 @@ const request = async (endpoint, options = {}) => {
 
 /*
 |--------------------------------------------------------------------------
-| FETCH PRODUCTS
+| Fetch All Products
 |--------------------------------------------------------------------------
 */
 
@@ -311,7 +465,9 @@ export const fetchProduct = createAsyncThunk(
 
   async (_, { rejectWithValue }) => {
     try {
-      const data = await request("/products");
+      const data = await request(
+        "/products"
+      );
 
       const products = Array.isArray(data)
         ? data
@@ -341,7 +497,7 @@ export const fetchProduct = createAsyncThunk(
 
 /*
 |--------------------------------------------------------------------------
-| INITIAL STATE
+| Initial State
 |--------------------------------------------------------------------------
 */
 
@@ -353,7 +509,7 @@ const initialState = {
 
 /*
 |--------------------------------------------------------------------------
-| PRODUCT SLICE
+| Product Slice
 |--------------------------------------------------------------------------
 */
 
@@ -367,22 +523,13 @@ const ProductSlice = createSlice({
   extraReducers: (builder) => {
     builder
 
-      /*
-      |--------------------------------------------------------------------------
-      | Pending
-      |--------------------------------------------------------------------------
-      */
-
-      .addCase(fetchProduct.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-
-      /*
-      |--------------------------------------------------------------------------
-      | Success
-      |--------------------------------------------------------------------------
-      */
+      .addCase(
+        fetchProduct.pending,
+        (state) => {
+          state.loading = true;
+          state.error = null;
+        }
+      )
 
       .addCase(
         fetchProduct.fulfilled,
@@ -397,12 +544,6 @@ const ProductSlice = createSlice({
             : [];
         }
       )
-
-      /*
-      |--------------------------------------------------------------------------
-      | Failed
-      |--------------------------------------------------------------------------
-      */
 
       .addCase(
         fetchProduct.rejected,

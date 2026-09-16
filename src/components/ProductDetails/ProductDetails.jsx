@@ -36,18 +36,47 @@ const ProductDetails = () => {
 
   const productState = useSelector((state) => state.product);
 
-  const products = productState?.product || [];
+  const products = Array.isArray(productState?.product)
+    ? productState.product
+    : [];
+
   const loading = productState?.loading || false;
   const error = productState?.error || null;
 
-  const [selectedColor, setSelectedColor] = useState("");
   const [selectedVariant, setSelectedVariant] = useState(null);
+  const [selectedColor, setSelectedColor] = useState("");
   const [selectedSize, setSelectedSize] = useState("");
   const [selectedImage, setSelectedImage] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [wishlist, setWishlist] = useState(false);
-
   const [openSection, setOpenSection] = useState(null);
+
+  /*
+  ============================================================
+  HELPERS
+  ============================================================
+  */
+
+  const cleanString = (value) => {
+    if (value === null || value === undefined) return "";
+    return String(value).trim();
+  };
+
+  const normalizeProductId = (value) => {
+    const numberValue = Number(value);
+
+    return Number.isFinite(numberValue) && numberValue > 0
+      ? numberValue
+      : null;
+  };
+
+  const normalizeVariantId = (value) => {
+    return cleanString(value);
+  };
+
+  const normalizeSize = (value) => {
+    return cleanString(value).toLowerCase();
+  };
 
   /*
   ============================================================
@@ -56,10 +85,10 @@ const ProductDetails = () => {
   */
 
   useEffect(() => {
-    if (!products || products.length === 0) {
+    if (products.length === 0) {
       dispatch(fetchProduct());
     }
-  }, [dispatch, products]);
+  }, [dispatch, products.length]);
 
   /*
   ============================================================
@@ -67,138 +96,154 @@ const ProductDetails = () => {
   ============================================================
   */
 
- 
+  const numericRouteProductId = normalizeProductId(productId);
 
-const product = Array.isArray(products)
-  ? products.find((item) => {
-      const currentProductId =
-        item?.productId ??
-        item?.id ??
-        item?._id;
+  const product = useMemo(() => {
+    if (!numericRouteProductId) return null;
 
-      return String(currentProductId) === String(productId);
-    })
-  : null;
+    return products.find((item) => {
+      const currentProductId = normalizeProductId(
+        item?.productId
+      );
+
+      return currentProductId === numericRouteProductId;
+    });
+  }, [products, numericRouteProductId]);
 
   /*
   ============================================================
   PRODUCT VARIANTS
+
+  Backend canonical structure:
+
+  variants: [
+    {
+      variantId: "product-1-black",
+      color: "Black",
+      colorCode: "#000000",
+      price: 2499,
+      oldPrice: 2999,
+      stock: 10,
+      images: [],
+      sizes: []
+    }
+  ]
+
+  IMPORTANT:
+  Do NOT use:
+  variant.id
+  variant.productId
+  variant._id
+  as variant identity.
   ============================================================
   */
 
-const variants = useMemo(() => {
-  if (!product) return [];
+  const variants = useMemo(() => {
+    if (!product) return [];
 
-  if (
-    Array.isArray(product.variants) &&
-    product.variants.length > 0
-  ) {
-    return product.variants.map((variant, index) => {
-      const fallbackVariantId = `${
-        product.productId ??
-        product.id ??
-        product._id
-      }-variant-${index}`;
+    if (
+      Array.isArray(product.variants) &&
+      product.variants.length > 0
+    ) {
+      return product.variants
+        .map((variant) => {
+          const variantId = normalizeVariantId(
+            variant?.variantId
+          );
 
-      return {
-        ...variant,
+          if (!variantId) {
+            return null;
+          }
 
-        variantId:
-          variant?.variantId ??
-          variant?.id ??
-          variant?.productId ??
-          fallbackVariantId,
+          return {
+            ...variant,
 
-        id:
-          variant?.id ??
-          variant?.variantId ??
-          variant?.productId ??
-          fallbackVariantId,
+            variantId,
 
-        color: variant?.color || "Default",
+            color: cleanString(variant?.color) || "Default",
 
-        colorCode:
-          variant?.colorCode || "#e5e7eb",
+            colorCode:
+              cleanString(variant?.colorCode) || "#e5e7eb",
 
-        price: Number(
-          variant?.price ??
-            product?.price ??
-            0
-        ),
+            price: Number(
+              variant?.price ?? product?.price ?? 0
+            ),
 
-        oldPrice: Number(
-          variant?.oldPrice ??
-            product?.oldPrice ??
-            0
-        ),
+            oldPrice: Number(
+              variant?.oldPrice ??
+                product?.oldPrice ??
+                0
+            ),
 
-        stock: Number(
-          variant?.stock ??
-            product?.stock ??
-            0
-        ),
+            stock: Number(
+              variant?.stock ??
+                product?.stock ??
+                0
+            ),
+
+            images: Array.isArray(variant?.images)
+              ? variant.images.filter(
+                  (image) =>
+                    typeof image === "string" &&
+                    image.trim() !== ""
+                )
+              : [],
+
+            sizes: Array.isArray(variant?.sizes)
+              ? variant.sizes
+                  .map((size) => ({
+                    size: cleanString(size?.size),
+                    stock: Number(size?.stock || 0),
+                  }))
+                  .filter((size) => size.size !== "")
+              : [],
+          };
+        })
+        .filter(Boolean);
+    }
+
+    /*
+    ------------------------------------------------------------
+    PRODUCT HAS NO VARIANTS
+
+    We create a UI-only virtual variant.
+
+    IMPORTANT:
+    variantId remains empty string because backend does not
+    have a real variant for this product.
+    ------------------------------------------------------------
+    */
+
+    return [
+      {
+        variantId: "",
+
+        color: "Default",
+
+        colorCode: "#e5e7eb",
+
+        price: Number(product?.price || 0),
+
+        oldPrice: Number(product?.oldPrice || 0),
+
+        stock: Number(product?.stock || 0),
 
         images:
-          Array.isArray(variant?.images)
-            ? variant.images
+          Array.isArray(product?.images) &&
+          product.images.length > 0
+            ? product.images.filter(Boolean)
+            : product?.image
+            ? [product.image]
             : [],
 
-        sizes:
-          Array.isArray(variant?.sizes)
-            ? variant.sizes
-            : [],
-      };
-    });
-  }
-
-  const defaultVariantId = `${
-    product.productId ??
-    product.id ??
-    product._id
-  }-default`;
-
-  return [
-    {
-      ...product,
-
-      variantId: defaultVariantId,
-
-      id: defaultVariantId,
-
-      color:
-        product.color || "Default",
-
-      colorCode:
-        product.colorCode || "#e5e7eb",
-
-      price: Number(
-        product.price || 0
-      ),
-
-      oldPrice: Number(
-        product.oldPrice || 0
-      ),
-
-      stock: Number(
-        product.stock || 0
-      ),
-
-      images:
-        Array.isArray(product.images) &&
-        product.images.length > 0
-          ? product.images
-          : product.image
-          ? [product.image]
-          : [],
-
-      sizes: [],
-    },
-  ];
-}, [product]);
+        sizes: [],
+      },
+    ];
+  }, [product]);
 
   /*
   ============================================================
-  INITIALIZE PRODUCT VARIANT
+  INITIALIZE VARIANT
   ============================================================
   */
 
@@ -212,12 +257,18 @@ const variants = useMemo(() => {
       return;
     }
 
+    /*
+    First choose a variant which has stock.
+    If none has stock, use first variant.
+    */
+
     const firstAvailableVariant =
       variants.find((variant) => {
-        if (
+        const hasSizes =
           Array.isArray(variant?.sizes) &&
-          variant.sizes.length > 0
-        ) {
+          variant.sizes.length > 0;
+
+        if (hasSizes) {
           return variant.sizes.some(
             (size) => Number(size?.stock || 0) > 0
           );
@@ -232,16 +283,30 @@ const variants = useMemo(() => {
       firstAvailableVariant?.color || ""
     );
 
+    /*
+    ------------------------------------------------------------
+    IMAGE
+    ------------------------------------------------------------
+    */
+
     const variantImages =
       Array.isArray(firstAvailableVariant?.images) &&
       firstAvailableVariant.images.length > 0
         ? firstAvailableVariant.images
-        : Array.isArray(product.images) &&
+        : Array.isArray(product?.images) &&
           product.images.length > 0
         ? product.images
-        : [product.image];
+        : product?.image
+        ? [product.image]
+        : [];
 
-    setSelectedImage(variantImages?.[0] || "");
+    setSelectedImage(variantImages[0] || "");
+
+    /*
+    ------------------------------------------------------------
+    FIRST AVAILABLE SIZE
+    ------------------------------------------------------------
+    */
 
     const firstAvailableSize =
       Array.isArray(firstAvailableVariant?.sizes)
@@ -266,21 +331,22 @@ const variants = useMemo(() => {
   const currentStock = useMemo(() => {
     if (!selectedVariant) return 0;
 
-    if (
-      Array.isArray(selectedVariant.sizes) &&
-      selectedVariant.sizes.length > 0
-    ) {
+    const hasSizes =
+      Array.isArray(selectedVariant?.sizes) &&
+      selectedVariant.sizes.length > 0;
+
+    if (hasSizes) {
       const currentSize =
         selectedVariant.sizes.find(
           (size) =>
-            String(size?.size) ===
-            String(selectedSize)
+            normalizeSize(size?.size) ===
+            normalizeSize(selectedSize)
         );
 
       return Number(currentSize?.stock || 0);
     }
 
-    return Number(selectedVariant.stock || 0);
+    return Number(selectedVariant?.stock || 0);
   }, [selectedVariant, selectedSize]);
 
   /*
@@ -325,16 +391,19 @@ const variants = useMemo(() => {
   const productImages = useMemo(() => {
     if (!product) return [];
 
-    const variantImages =
-      Array.isArray(selectedVariant?.images)
-        ? selectedVariant.images
-        : [];
+    const variantImages = Array.isArray(
+      selectedVariant?.images
+    )
+      ? selectedVariant.images
+      : [];
 
     const mainImages =
-      Array.isArray(product.images) &&
+      Array.isArray(product?.images) &&
       product.images.length > 0
         ? product.images
-        : [product.image];
+        : product?.image
+        ? [product.image]
+        : [];
 
     const images =
       variantImages.length > 0
@@ -354,7 +423,7 @@ const variants = useMemo(() => {
 
   /*
   ============================================================
-  COLOR CHANGE
+  COLOR / VARIANT CHANGE
   ============================================================
   */
 
@@ -364,22 +433,36 @@ const variants = useMemo(() => {
     setSelectedVariant(variant);
 
     setSelectedColor(
-      variant.color || ""
+      variant?.color || ""
     );
 
+    /*
+    ------------------------------------------------------------
+    Change image
+    ------------------------------------------------------------
+    */
+
     const images =
-      Array.isArray(variant.images) &&
+      Array.isArray(variant?.images) &&
       variant.images.length > 0
         ? variant.images
         : Array.isArray(product?.images) &&
           product.images.length > 0
         ? product.images
-        : [product?.image];
+        : product?.image
+        ? [product.image]
+        : [];
 
-    setSelectedImage(images?.[0] || "");
+    setSelectedImage(images[0] || "");
+
+    /*
+    ------------------------------------------------------------
+    Automatically choose first available size
+    ------------------------------------------------------------
+    */
 
     const firstAvailableSize =
-      Array.isArray(variant.sizes)
+      Array.isArray(variant?.sizes)
         ? variant.sizes.find(
             (size) =>
               Number(size?.stock || 0) > 0
@@ -402,11 +485,14 @@ const variants = useMemo(() => {
   const handleSizeChange = (size) => {
     if (!size) return;
 
-    if (Number(size.stock || 0) <= 0) {
+    if (Number(size?.stock || 0) <= 0) {
       return;
     }
 
-    setSelectedSize(size.size);
+    setSelectedSize(
+      cleanString(size?.size)
+    );
+
     setQuantity(1);
   };
 
@@ -417,7 +503,10 @@ const variants = useMemo(() => {
   */
 
   const increaseQuantity = () => {
-    if (currentStock > 0 && quantity < currentStock) {
+    if (
+      currentStock > 0 &&
+      quantity < currentStock
+    ) {
       setQuantity((prev) => prev + 1);
     }
   };
@@ -431,87 +520,126 @@ const variants = useMemo(() => {
   /*
   ============================================================
   CHECKOUT PRODUCT
+
+  THIS OBJECT IS SENT TO:
+  CartSlice
+  Checkout.jsx
+
+  Canonical:
+  productId = number
+  variantId = string
+  selectedSize = exact size string
   ============================================================
   */
 
   const checkoutProduct = useMemo(() => {
-  if (!product) return null;
+    if (!product) return null;
 
-  const numericProductId =
-    product?.productId ??
-    product?.id ??
-    null;
+    const numericProductId =
+      normalizeProductId(
+        product?.productId
+      );
 
-  const currentVariantId =
-    selectedVariant?.variantId ??
-    selectedVariant?.id ??
-    selectedVariant?.productId ??
-    null;
+    if (!numericProductId) {
+      return null;
+    }
 
-  const currentImage =
-    selectedVariant?.images?.[0] ||
-    selectedImage ||
-    product?.image ||
-    "";
+    /*
+    IMPORTANT:
+    Only variantId is used.
+    */
 
-  return {
-    ...product,
+    const currentVariantId =
+      normalizeVariantId(
+        selectedVariant?.variantId
+      );
 
-    productId: numericProductId,
+    const currentImage =
+      selectedImage ||
+      selectedVariant?.images?.[0] ||
+      product?.image ||
+      "";
 
-    id: numericProductId,
-
-    variantId: currentVariantId,
-
-    selectedColor:
-      selectedVariant?.color ||
-      product?.color ||
-      null,
-
-    selectedColorCode:
-      selectedVariant?.colorCode ||
-      null,
-
-    selectedSize:
-      selectedSize || null,
-
-    price: currentPrice,
-
-    oldPrice: currentOldPrice,
-
-    image: currentImage,
-
-    images:
-      Array.isArray(
-        selectedVariant?.images
-      ) &&
+    const currentImages =
+      Array.isArray(selectedVariant?.images) &&
       selectedVariant.images.length > 0
         ? selectedVariant.images
-        : product?.images || [],
+        : Array.isArray(product?.images)
+        ? product.images
+        : currentImage
+        ? [currentImage]
+        : [];
 
-    stock: currentStock,
+    return {
+      ...product,
 
+      /*
+      Canonical product identity
+      */
+      productId: numericProductId,
+
+      /*
+      Legacy frontend compatibility only.
+      Backend should use productId.
+      */
+      id: numericProductId,
+
+      /*
+      Canonical variant identity
+      */
+      variantId: currentVariantId,
+
+      selectedColor:
+        selectedVariant?.color || "",
+
+      selectedColorCode:
+        selectedVariant?.colorCode || "",
+
+      selectedSize:
+        selectedSize || "",
+
+      price: currentPrice,
+
+      oldPrice: currentOldPrice,
+
+      image: currentImage,
+
+      images: currentImages,
+
+      stock: currentStock,
+
+      quantity,
+    };
+  }, [
+    product,
+    selectedVariant,
+    selectedSize,
+    selectedImage,
+    currentPrice,
+    currentOldPrice,
+    currentStock,
     quantity,
-  };
-}, [
-  product,
-  selectedVariant,
-  selectedSize,
-  currentPrice,
-  currentOldPrice,
-  selectedImage,
-  currentStock,
-  quantity,
-]);
+  ]);
 
   /*
   ============================================================
-  VALIDATE PRODUCT SELECTION
+  VALIDATE SELECTION
   ============================================================
   */
 
   const validateSelection = () => {
     if (!product) {
+      alert("Product পাওয়া যায়নি।");
+      return false;
+    }
+
+    const numericProductId =
+      normalizeProductId(
+        product?.productId
+      );
+
+    if (!numericProductId) {
+      alert("Product ID invalid.");
       return false;
     }
 
@@ -520,17 +648,50 @@ const variants = useMemo(() => {
       return false;
     }
 
+    const hasSizes =
+      Array.isArray(selectedVariant?.sizes) &&
+      selectedVariant.sizes.length > 0;
+
+    if (hasSizes && !selectedSize) {
+      alert("দয়া করে একটি size select করুন।");
+      return false;
+    }
+
+    if (hasSizes) {
+      const selectedSizeData =
+        selectedVariant.sizes.find(
+          (size) =>
+            normalizeSize(size?.size) ===
+            normalizeSize(selectedSize)
+        );
+
+      if (!selectedSizeData) {
+        alert("Selected size পাওয়া যায়নি।");
+        return false;
+      }
+
+      if (
+        Number(selectedSizeData.stock || 0) <= 0
+      ) {
+        alert("এই size বর্তমানে stock out.");
+        return false;
+      }
+    } else {
+      if (Number(selectedVariant?.stock || 0) <= 0) {
+        alert("এই product বর্তমানে stock out.");
+        return false;
+      }
+    }
+
     if (currentStock <= 0) {
       alert("এই product বর্তমানে stock out.");
       return false;
     }
 
-    if (
-      Array.isArray(selectedVariant?.sizes) &&
-      selectedVariant.sizes.length > 0 &&
-      !selectedSize
-    ) {
-      alert("দয়া করে একটি size select করুন।");
+    if (quantity > currentStock) {
+      alert(
+        `Maximum ${currentStock} টি product available.`
+      );
       return false;
     }
 
@@ -546,6 +707,11 @@ const variants = useMemo(() => {
   const handleAddToCart = () => {
     if (!validateSelection()) return;
 
+    if (!checkoutProduct) {
+      alert("Product data invalid.");
+      return;
+    }
+
     dispatch(addToCart(checkoutProduct));
   };
 
@@ -558,12 +724,22 @@ const variants = useMemo(() => {
   const handleBuyNow = () => {
     if (!validateSelection()) return;
 
+    if (!checkoutProduct) {
+      alert("Product data invalid.");
+      return;
+    }
+
     navigate("/Checkout", {
       state: {
         product: checkoutProduct,
+
         quantity,
-        productId: checkoutProduct?.productId ?? null,
-        variantId: checkoutProduct?.variantId ?? null,
+
+        productId:
+          checkoutProduct.productId,
+
+        variantId:
+          checkoutProduct.variantId || "",
       },
     });
   };
@@ -646,6 +822,7 @@ const variants = useMemo(() => {
   const productSchema = product
     ? {
         "@context": "https://schema.org",
+
         "@type": "Product",
 
         name: product.name,
@@ -655,13 +832,11 @@ const variants = useMemo(() => {
         image: productImages,
 
         sku: String(
-  product?.productId ??
-    product?.id ??
-    product?._id ??
-    ""
-),
+          product?.productId || ""
+        ),
 
-        category: product.category || undefined,
+        category:
+          product.category || undefined,
 
         brand: {
           "@type": "Brand",
@@ -675,9 +850,11 @@ const variants = useMemo(() => {
               aggregateRating: {
                 "@type":
                   "AggregateRating",
+
                 ratingValue: Number(
                   product.rating
                 ),
+
                 reviewCount: Number(
                   product.reviews
                 ),
@@ -715,7 +892,6 @@ const variants = useMemo(() => {
     return (
       <main className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
         <div className="text-center">
-
           <div className="w-11 h-11 border-4 border-gray-200 border-t-black rounded-full animate-spin mx-auto mb-5" />
 
           <h2 className="text-lg font-semibold text-gray-900">
@@ -725,7 +901,6 @@ const variants = useMemo(() => {
           <p className="text-sm text-gray-500 mt-2">
             Please wait a moment.
           </p>
-
         </div>
       </main>
     );
@@ -741,7 +916,6 @@ const variants = useMemo(() => {
     return (
       <main className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
         <div className="text-center max-w-md">
-
           <FiBox className="text-5xl text-gray-300 mx-auto mb-5" />
 
           <h1 className="text-2xl font-bold text-gray-900">
@@ -761,7 +935,6 @@ const variants = useMemo(() => {
           >
             Try Again
           </button>
-
         </div>
       </main>
     );
@@ -776,9 +949,7 @@ const variants = useMemo(() => {
   if (!product) {
     return (
       <main className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-
         <div className="text-center max-w-md">
-
           <div className="w-20 h-20 rounded-full bg-white shadow-sm flex items-center justify-center mx-auto mb-6">
             <FiBox className="text-4xl text-gray-300" />
           </div>
@@ -802,9 +973,7 @@ const variants = useMemo(() => {
             <FiHome />
             Back to Home
           </Link>
-
         </div>
-
       </main>
     );
   }
@@ -815,7 +984,15 @@ const variants = useMemo(() => {
   ============================================================
   */
 
-  const rating = Number(product.rating || 0);
+  const rating = Number(
+    product.rating || 0
+  );
+
+  /*
+  ============================================================
+  RENDER
+  ============================================================
+  */
 
   return (
     <>
@@ -824,15 +1001,11 @@ const variants = useMemo(() => {
       ====================================================== */}
 
       <Helmet>
-
         <title>{seoTitle}</title>
 
         <meta
           name="description"
-          content={seoDescription.slice(
-            0,
-            160
-          )}
+          content={seoDescription.slice(0, 160)}
         />
 
         <meta
@@ -849,8 +1022,6 @@ const variants = useMemo(() => {
           rel="canonical"
           href={canonicalUrl}
         />
-
-        {/* Open Graph */}
 
         <meta
           property="og:type"
@@ -887,8 +1058,6 @@ const variants = useMemo(() => {
           />
         )}
 
-        {/* Twitter */}
-
         <meta
           name="twitter:card"
           content="summary_large_image"
@@ -914,14 +1083,13 @@ const variants = useMemo(() => {
           />
         )}
 
-        {/* Product JSON-LD */}
-
         {productSchema && (
           <script type="application/ld+json">
-            {JSON.stringify(productSchema)}
+            {JSON.stringify(
+              productSchema
+            )}
           </script>
         )}
-
       </Helmet>
 
       {/* ======================================================
@@ -929,18 +1097,15 @@ const variants = useMemo(() => {
       ====================================================== */}
 
       <main className="min-h-screen bg-transparent text-gray-900">
-
         {/* ====================================================
             BREADCRUMB
         ==================================================== */}
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
-
           <nav
             aria-label="Breadcrumb"
             className="flex flex-wrap items-center gap-2 text-sm text-gray-500"
           >
-
             <Link
               to="/"
               className="hover:text-black transition"
@@ -963,9 +1128,7 @@ const variants = useMemo(() => {
             <span className="text-gray-900 font-medium truncate max-w-[250px]">
               {product.name}
             </span>
-
           </nav>
-
         </div>
 
         {/* ====================================================
@@ -973,17 +1136,13 @@ const variants = useMemo(() => {
         ==================================================== */}
 
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16">
-
             {/* =================================================
                 IMAGE GALLERY
             ================================================= */}
 
             <div>
-
               <div className="relative bg-gray-50 rounded-3xl overflow-hidden aspect-square">
-
                 {discountPercentage > 0 && (
                   <div className="absolute top-5 left-5 z-10 bg-black text-white text-xs sm:text-sm font-bold px-4 py-2 rounded-full">
                     -{discountPercentage}% OFF
@@ -1010,12 +1169,10 @@ const variants = useMemo(() => {
                   loading="eager"
                   className="w-full h-full object-contain p-6 sm:p-10"
                 />
-
               </div>
 
               {productImages.length > 1 && (
                 <div className="flex gap-3 mt-4 overflow-x-auto pb-2">
-
                   {productImages.map(
                     (image, index) => (
                       <button
@@ -1035,7 +1192,6 @@ const variants = useMemo(() => {
                             : "border-gray-200 hover:border-gray-400"
                         }`}
                       >
-
                         <img
                           src={image}
                           alt={`${product.name} image ${
@@ -1044,14 +1200,11 @@ const variants = useMemo(() => {
                           loading="lazy"
                           className="w-full h-full object-contain p-2"
                         />
-
                       </button>
                     )
                   )}
-
                 </div>
               )}
-
             </div>
 
             {/* =================================================
@@ -1059,7 +1212,6 @@ const variants = useMemo(() => {
             ================================================= */}
 
             <div className="flex flex-col">
-
               {/* Brand */}
 
               {product.brand && (
@@ -1077,12 +1229,10 @@ const variants = useMemo(() => {
               {/* Rating */}
 
               <div className="flex flex-wrap items-center gap-3 mt-4">
-
                 <div
                   className="flex items-center gap-1"
                   aria-label={`Rating ${rating} out of 5`}
                 >
-
                   {[1, 2, 3, 4, 5].map(
                     (star) =>
                       star <=
@@ -1098,7 +1248,6 @@ const variants = useMemo(() => {
                         />
                       )
                   )}
-
                 </div>
 
                 {rating > 0 && (
@@ -1113,13 +1262,11 @@ const variants = useMemo(() => {
                     ({product.reviews} reviews)
                   </span>
                 )}
-
               </div>
 
               {/* Price */}
 
               <div className="flex items-center gap-3 mt-6">
-
                 <span className="text-3xl font-bold text-gray-950">
                   ৳
                   {currentPrice.toLocaleString(
@@ -1136,7 +1283,6 @@ const variants = useMemo(() => {
                     )}
                   </span>
                 )}
-
               </div>
 
               {/* Description */}
@@ -1154,11 +1300,8 @@ const variants = useMemo(() => {
 
               {variants.length > 0 && (
                 <div className="mt-8">
-
                   <div className="flex items-center justify-between mb-4">
-
                     <div>
-
                       <h2 className="text-base font-bold text-gray-950">
                         Select Color
                       </h2>
@@ -1170,18 +1313,14 @@ const variants = useMemo(() => {
                             "Choose a color"}
                         </span>
                       </p>
-
                     </div>
 
                     <FiTag className="text-gray-400 text-lg" />
-
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-
                     {variants.map(
                       (variant) => {
-
                         const hasSizes =
                           Array.isArray(
                             variant?.sizes
@@ -1211,23 +1350,39 @@ const variants = useMemo(() => {
                         const isOutOfStock =
                           variantStock <= 0;
 
+                        /*
+                        ------------------------------------------------
+                        ONLY variantId
+                        ------------------------------------------------
+                        */
+
                         const selectedVariantId =
-  selectedVariant?.variantId ??
-  selectedVariant?.id ??
-  "";
+                          normalizeVariantId(
+                            selectedVariant?.variantId
+                          );
 
-const currentVariantId =
-  variant?.variantId ??
-  variant?.id ??
-  "";
+                        const currentVariantId =
+                          normalizeVariantId(
+                            variant?.variantId
+                          );
 
-const isSelected =
-  String(selectedVariantId) ===
-  String(currentVariantId);
+                        const isSelected =
+                          selectedVariantId ===
+                          currentVariantId;
+
+                        /*
+                        Virtual no-variant product:
+                        both IDs are empty.
+
+                        It should still appear selected.
+                        */
 
                         return (
                           <button
-                            key={variant.id}
+                            key={
+                              currentVariantId ||
+                              `default-${product.productId}`
+                            }
                             type="button"
                             disabled={
                               isOutOfStock
@@ -1259,7 +1414,6 @@ const isSelected =
                               }
                             `}
                           >
-
                             {isSelected && (
                               <span className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black text-white flex items-center justify-center z-10">
                                 <FiCheck className="text-sm" />
@@ -1267,7 +1421,6 @@ const isSelected =
                             )}
 
                             <div className="flex items-center gap-3">
-
                               <span
                                 className={`
                                   w-11 h-11
@@ -1292,7 +1445,6 @@ const isSelected =
                               />
 
                               <div className="min-w-0 pr-5">
-
                                 <p
                                   className={`font-semibold text-sm truncate ${
                                     isSelected
@@ -1316,18 +1468,13 @@ const isSelected =
                                     ? "Out of stock"
                                     : "Available"}
                                 </p>
-
                               </div>
-
                             </div>
-
                           </button>
                         );
                       }
                     )}
-
                   </div>
-
                 </div>
               )}
 
@@ -1341,9 +1488,7 @@ const isSelected =
                 selectedVariant.sizes.length >
                   0 && (
                   <div className="mt-8">
-
                     <div className="flex items-center justify-between mb-4">
-
                       <h2 className="text-base font-bold">
                         Select Size
                       </h2>
@@ -1356,28 +1501,27 @@ const isSelected =
                           </span>
                         </span>
                       )}
-
                     </div>
 
                     <div className="flex flex-wrap gap-3">
-
                       {selectedVariant.sizes.map(
-                        (size) => {
-
+                        (size, index) => {
                           const isSelected =
-                            String(
+                            normalizeSize(
                               selectedSize
                             ) ===
-                            String(size.size);
+                            normalizeSize(
+                              size?.size
+                            );
 
                           const outOfStock =
                             Number(
-                              size.stock || 0
+                              size?.stock || 0
                             ) <= 0;
 
                           return (
                             <button
-                              key={size.size}
+                              key={`${size.size}-${index}`}
                               type="button"
                               disabled={
                                 outOfStock
@@ -1412,9 +1556,7 @@ const isSelected =
                           );
                         }
                       )}
-
                     </div>
-
                   </div>
                 )}
 
@@ -1423,27 +1565,21 @@ const isSelected =
               ================================================= */}
 
               <div className="mt-6">
-
                 {currentStock > 0 ? (
                   <div className="inline-flex items-center gap-2 text-sm font-medium text-green-700 bg-green-50 px-4 py-2 rounded-full">
-
                     <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
 
                     {currentStock <= 5
                       ? `Only ${currentStock} left in stock`
                       : "In Stock"}
-
                   </div>
                 ) : (
                   <div className="inline-flex items-center gap-2 text-sm font-medium text-red-700 bg-red-50 px-4 py-2 rounded-full">
-
                     <span className="w-2 h-2 bg-red-500 rounded-full" />
 
                     Out of Stock
-
                   </div>
                 )}
-
               </div>
 
               {/* =================================================
@@ -1451,13 +1587,11 @@ const isSelected =
               ================================================= */}
 
               <div className="flex items-center gap-4 mt-7">
-
                 <span className="font-semibold text-sm">
                   Quantity
                 </span>
 
                 <div className="flex items-center border border-gray-300 rounded-xl overflow-hidden">
-
                   <button
                     type="button"
                     onClick={
@@ -1491,9 +1625,7 @@ const isSelected =
                   >
                     <FiPlus />
                   </button>
-
                 </div>
-
               </div>
 
               {/* =================================================
@@ -1501,7 +1633,6 @@ const isSelected =
               ================================================= */}
 
               <div className="grid grid-cols-[1fr_auto] gap-3 mt-7">
-
                 <button
                   type="button"
                   onClick={
@@ -1539,7 +1670,6 @@ const isSelected =
                     }`}
                   />
                 </button>
-
               </div>
 
               <button
@@ -1558,7 +1688,6 @@ const isSelected =
               ================================================= */}
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-7">
-
                 <div className="border border-gray-200 rounded-xl p-4">
                   <FiTruck className="text-xl mb-2" />
 
@@ -1594,12 +1723,9 @@ const isSelected =
                     Quality checked
                   </p>
                 </div>
-
               </div>
-
             </div>
           </div>
-
         </section>
 
         {/* ======================================================
@@ -1607,18 +1733,13 @@ const isSelected =
         ====================================================== */}
 
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
-
           <div className="border-t border-gray-200 pt-10">
-
             {/* ==================================================
                 PRODUCT OVERVIEW
-                ALWAYS VISIBLE
             ================================================== */}
 
             <section className="mb-12">
-
               <div className="flex items-center gap-3 mb-5">
-
                 <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
                   <FiInfo />
                 </div>
@@ -1626,25 +1747,20 @@ const isSelected =
                 <h2 className="text-2xl font-bold">
                   Product Overview
                 </h2>
-
               </div>
 
               <div className="bg-gray-50 rounded-2xl p-5 sm:p-7">
-
                 <p className="text-gray-700 leading-8 whitespace-pre-line">
                   {product.details
                     ?.overview ||
                     product.description ||
                     "Product overview information is not available."}
                 </p>
-
               </div>
-
             </section>
 
             {/* ==================================================
                 FEATURES
-                ALWAYS VISIBLE
             ================================================== */}
 
             {Array.isArray(
@@ -1653,9 +1769,7 @@ const isSelected =
               product.details.features
                 .length > 0 && (
                 <section className="mb-12">
-
                   <div className="flex items-center gap-3 mb-5">
-
                     <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
                       <FiCheck />
                     </div>
@@ -1663,11 +1777,9 @@ const isSelected =
                     <h2 className="text-2xl font-bold">
                       প্রধান বৈশিষ্ট্য
                     </h2>
-
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-
                     {product.details.features.map(
                       (
                         feature,
@@ -1677,9 +1789,7 @@ const isSelected =
                           key={index}
                           className="group border border-gray-200 rounded-2xl p-5 hover:border-gray-400 hover:shadow-sm transition"
                         >
-
                           <div className="flex items-start gap-3">
-
                             <div className="w-8 h-8 flex-shrink-0 rounded-full bg-black text-white flex items-center justify-center">
                               <FiCheck className="text-sm" />
                             </div>
@@ -1687,33 +1797,32 @@ const isSelected =
                             <p className="text-gray-700 leading-6">
                               {feature}
                             </p>
-
                           </div>
-
                         </div>
                       )
                     )}
-
                   </div>
-
                 </section>
               )}
 
             {/* ==================================================
                 SPECIFICATIONS
-                ALWAYS VISIBLE
             ================================================== */}
 
-            {product.details
-              ?.specifications &&
+            {product.details?.specifications &&
+              typeof product.details
+                .specifications ===
+                "object" &&
+              !Array.isArray(
+                product.details
+                  .specifications
+              ) &&
               Object.keys(
                 product.details
                   .specifications
               ).length > 0 && (
                 <section className="mb-12">
-
                   <div className="flex items-center gap-3 mb-5">
-
                     <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
                       <FiList />
                     </div>
@@ -1721,17 +1830,12 @@ const isSelected =
                     <h2 className="text-2xl font-bold">
                       Specifications
                     </h2>
-
                   </div>
 
                   <div className="border border-gray-200 rounded-2xl overflow-hidden">
-
                     <div className="overflow-x-auto">
-
                       <table className="w-full text-sm">
-
                         <tbody>
-
                           {Object.entries(
                             product.details
                               .specifications
@@ -1753,29 +1857,27 @@ const isSelected =
                                     : "bg-white"
                                 }
                               >
-
                                 <td className="px-5 py-4 font-semibold text-gray-800 w-1/3 border-r border-gray-200">
                                   {key}
                                 </td>
 
                                 <td className="px-5 py-4 text-gray-600">
-                                  {String(
-                                    value
-                                  )}
+                                  {typeof value ===
+                                  "object"
+                                    ? JSON.stringify(
+                                        value
+                                      )
+                                    : String(
+                                        value
+                                      )}
                                 </td>
-
                               </tr>
                             )
                           )}
-
                         </tbody>
-
                       </table>
-
                     </div>
-
                   </div>
-
                 </section>
               )}
 
@@ -1783,9 +1885,16 @@ const isSelected =
                 HOW TO USE
             ================================================== */}
 
-            {product.details?.howToUse && (
+            {((Array.isArray(
+              product.details?.howToUse
+            ) &&
+              product.details.howToUse
+                .length > 0) ||
+              (typeof product.details
+                ?.howToUse === "string" &&
+                product.details.howToUse.trim() !==
+                  "")) && (
               <div className="border-t border-gray-200">
-
                 <button
                   type="button"
                   onClick={() =>
@@ -1795,15 +1904,12 @@ const isSelected =
                   }
                   className="w-full py-5 flex items-center justify-between text-left"
                 >
-
                   <div className="flex items-center gap-3">
-
                     <FiTool className="text-xl" />
 
                     <h2 className="text-lg font-bold">
                       How To Use
                     </h2>
-
                   </div>
 
                   {openSection ===
@@ -1812,19 +1918,44 @@ const isSelected =
                   ) : (
                     <FiChevronDown />
                   )}
-
                 </button>
 
                 {openSection ===
                   "howToUse" && (
-                  <div className="pb-6 text-gray-600 leading-7 whitespace-pre-line">
-                    {
+                  <div className="pb-6 text-gray-600 leading-7">
+                    {Array.isArray(
                       product.details
                         .howToUse
-                    }
+                    ) ? (
+                      <ul className="space-y-3">
+                        {product.details.howToUse.map(
+                          (
+                            item,
+                            index
+                          ) => (
+                            <li
+                              key={index}
+                              className="flex items-start gap-3"
+                            >
+                              <FiCheck className="mt-1 text-green-600 flex-shrink-0" />
+
+                              <span>
+                                {item}
+                              </span>
+                            </li>
+                          )
+                        )}
+                      </ul>
+                    ) : (
+                      <p className="whitespace-pre-line">
+                        {
+                          product.details
+                            .howToUse
+                        }
+                      </p>
+                    )}
                   </div>
                 )}
-
               </div>
             )}
 
@@ -1832,28 +1963,32 @@ const isSelected =
                 CARE INSTRUCTIONS
             ================================================== */}
 
-            {product.details
-              ?.careInstructions && (
+            {((Array.isArray(
+              product.details
+                ?.careInstructions
+            ) &&
+              product.details
+                .careInstructions.length >
+                0) ||
+              (typeof product.details
+                ?.careInstructions ===
+                "string" &&
+                product.details.careInstructions.trim() !==
+                  "")) && (
               <div className="border-t border-gray-200">
-
                 <button
                   type="button"
                   onClick={() =>
-                    toggleSection(
-                      "care"
-                    )
+                    toggleSection("care")
                   }
                   className="w-full py-5 flex items-center justify-between text-left"
                 >
-
                   <div className="flex items-center gap-3">
-
                     <FiTool className="text-xl" />
 
                     <h2 className="text-lg font-bold">
                       Care Instructions
                     </h2>
-
                   </div>
 
                   {openSection ===
@@ -1862,19 +1997,44 @@ const isSelected =
                   ) : (
                     <FiChevronDown />
                   )}
-
                 </button>
 
                 {openSection ===
                   "care" && (
-                  <div className="pb-6 text-gray-600 leading-7 whitespace-pre-line">
-                    {
+                  <div className="pb-6 text-gray-600 leading-7">
+                    {Array.isArray(
                       product.details
                         .careInstructions
-                    }
+                    ) ? (
+                      <ul className="space-y-3">
+                        {product.details.careInstructions.map(
+                          (
+                            item,
+                            index
+                          ) => (
+                            <li
+                              key={index}
+                              className="flex items-start gap-3"
+                            >
+                              <FiCheck className="mt-1 text-green-600 flex-shrink-0" />
+
+                              <span>
+                                {item}
+                              </span>
+                            </li>
+                          )
+                        )}
+                      </ul>
+                    ) : (
+                      <p className="whitespace-pre-line">
+                        {
+                          product.details
+                            .careInstructions
+                        }
+                      </p>
+                    )}
                   </div>
                 )}
-
               </div>
             )}
 
@@ -1882,10 +2042,18 @@ const isSelected =
                 WHAT'S INCLUDED
             ================================================== */}
 
-            {product.details
-              ?.whatsIncluded && (
+            {((Array.isArray(
+              product.details
+                ?.whatsIncluded
+            ) &&
+              product.details.whatsIncluded
+                .length > 0) ||
+              (typeof product.details
+                ?.whatsIncluded ===
+                "string" &&
+                product.details.whatsIncluded.trim() !==
+                  "")) && (
               <div className="border-t border-gray-200">
-
                 <button
                   type="button"
                   onClick={() =>
@@ -1895,15 +2063,12 @@ const isSelected =
                   }
                   className="w-full py-5 flex items-center justify-between text-left"
                 >
-
                   <div className="flex items-center gap-3">
-
                     <FiPackage className="text-xl" />
 
                     <h2 className="text-lg font-bold">
                       What's Included
                     </h2>
-
                   </div>
 
                   {openSection ===
@@ -1912,28 +2077,23 @@ const isSelected =
                   ) : (
                     <FiChevronDown />
                   )}
-
                 </button>
 
                 {openSection ===
                   "included" && (
                   <div className="pb-6">
-
                     {Array.isArray(
                       product.details
                         .whatsIncluded
                     ) ? (
                       <ul className="space-y-3">
-
                         {product.details.whatsIncluded.map(
                           (
                             item,
                             index
                           ) => (
                             <li
-                              key={
-                                index
-                              }
+                              key={index}
                               className="flex items-center gap-3 text-gray-600"
                             >
                               <FiCheck className="text-green-600" />
@@ -1942,247 +2102,173 @@ const isSelected =
                             </li>
                           )
                         )}
-
                       </ul>
                     ) : (
-                      <p className="text-gray-600">
+                      <p className="text-gray-600 whitespace-pre-line">
                         {
-                          product
-                            .details
+                          product.details
                             .whatsIncluded
                         }
                       </p>
                     )}
-
                   </div>
                 )}
-
               </div>
             )}
 
             {/* ==================================================
                 DELIVERY
+
+                Backend schema:
+                deliveryInfo: String
+
+                So DON'T use:
+                deliveryInfo.insideDhaka
+                deliveryInfo.outsideDhaka
+                deliveryInfo.deliveryCharge
+                deliveryInfo.note
             ================================================== */}
 
-            {product.details
-              ?.deliveryInfo && (
-              <div className="border-t border-gray-200">
+            {typeof product.details
+              ?.deliveryInfo ===
+              "string" &&
+              product.details.deliveryInfo.trim() !==
+                "" && (
+                <div className="border-t border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      toggleSection(
+                        "delivery"
+                      )
+                    }
+                    className="w-full py-5 flex items-center justify-between text-left"
+                  >
+                    <div className="flex items-center gap-3">
+                      <FiTruck className="text-xl" />
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    toggleSection(
-                      "delivery"
-                    )
-                  }
-                  className="w-full py-5 flex items-center justify-between text-left"
-                >
-
-                  <div className="flex items-center gap-3">
-
-                    <FiTruck className="text-xl" />
-
-                    <h2 className="text-lg font-bold">
-                      Delivery Information
-                    </h2>
-
-                  </div>
-
-                  {openSection ===
-                  "delivery" ? (
-                    <FiChevronUp />
-                  ) : (
-                    <FiChevronDown />
-                  )}
-
-                </button>
-
-                {openSection ===
-                  "delivery" && (
-                  <div className="pb-6">
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-                      {product.details
-                        .deliveryInfo
-                        .insideDhaka && (
-                        <div className="bg-gray-50 rounded-xl p-5">
-
-                          <p className="font-semibold mb-2">
-                            Inside Dhaka
-                          </p>
-
-                          <p className="text-gray-600">
-                            {
-                              product
-                                .details
-                                .deliveryInfo
-                                .insideDhaka
-                            }
-                          </p>
-
-                        </div>
-                      )}
-
-                      {product.details
-                        .deliveryInfo
-                        .outsideDhaka && (
-                        <div className="bg-gray-50 rounded-xl p-5">
-
-                          <p className="font-semibold mb-2">
-                            Outside Dhaka
-                          </p>
-
-                          <p className="text-gray-600">
-                            {
-                              product
-                                .details
-                                .deliveryInfo
-                                .outsideDhaka
-                            }
-                          </p>
-
-                        </div>
-                      )}
-
+                      <h2 className="text-lg font-bold">
+                        Delivery Information
+                      </h2>
                     </div>
 
-                    {product.details
-                      .deliveryInfo
-                      .deliveryCharge && (
-                      <div className="mt-4 text-gray-600">
+                    {openSection ===
+                    "delivery" ? (
+                      <FiChevronUp />
+                    ) : (
+                      <FiChevronDown />
+                    )}
+                  </button>
 
-                        <strong>
-                          Delivery Charge:
-                        </strong>{" "}
-
-                        {
-                          product
-                            .details
-                            .deliveryInfo
-                            .deliveryCharge
-                        }
-
+                  {openSection ===
+                    "delivery" && (
+                    <div className="pb-6">
+                      <div className="bg-gray-50 rounded-xl p-5">
+                        <p className="text-gray-600 leading-7 whitespace-pre-line">
+                          {
+                            product.details
+                              .deliveryInfo
+                          }
+                        </p>
                       </div>
-                    )}
-
-                    {product.details
-                      .deliveryInfo
-                      .note && (
-                      <p className="mt-3 text-sm text-gray-500">
-                        {
-                          product
-                            .details
-                            .deliveryInfo
-                            .note
-                        }
-                      </p>
-                    )}
-
-                  </div>
-                )}
-
-              </div>
-            )}
+                    </div>
+                  )}
+                </div>
+              )}
 
             {/* ==================================================
                 RETURN POLICY
             ================================================== */}
 
-            {product.details
-              ?.returnPolicy && (
-              <div className="border-t border-gray-200">
+            {typeof product.details
+              ?.returnPolicy ===
+              "string" &&
+              product.details.returnPolicy.trim() !==
+                "" && (
+                <div className="border-t border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      toggleSection(
+                        "return"
+                      )
+                    }
+                    className="w-full py-5 flex items-center justify-between text-left"
+                  >
+                    <div className="flex items-center gap-3">
+                      <FiRotateCcw className="text-xl" />
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    toggleSection(
-                      "return"
-                    )
-                  }
-                  className="w-full py-5 flex items-center justify-between text-left"
-                >
+                      <h2 className="text-lg font-bold">
+                        Return Policy
+                      </h2>
+                    </div>
 
-                  <div className="flex items-center gap-3">
-
-                    <FiRotateCcw className="text-xl" />
-
-                    <h2 className="text-lg font-bold">
-                      Return Policy
-                    </h2>
-
-                  </div>
+                    {openSection ===
+                    "return" ? (
+                      <FiChevronUp />
+                    ) : (
+                      <FiChevronDown />
+                    )}
+                  </button>
 
                   {openSection ===
-                  "return" ? (
-                    <FiChevronUp />
-                  ) : (
-                    <FiChevronDown />
+                    "return" && (
+                    <div className="pb-6 text-gray-600 leading-7 whitespace-pre-line">
+                      {
+                        product.details
+                          .returnPolicy
+                      }
+                    </div>
                   )}
-
-                </button>
-
-                {openSection ===
-                  "return" && (
-                  <div className="pb-6 text-gray-600 leading-7 whitespace-pre-line">
-                    {
-                      product.details
-                        .returnPolicy
-                    }
-                  </div>
-                )}
-
-              </div>
-            )}
+                </div>
+              )}
 
             {/* ==================================================
                 WARRANTY
             ================================================== */}
 
-            {product.details?.warranty && (
-              <div className="border-t border-gray-200">
+            {typeof product.details
+              ?.warranty ===
+              "string" &&
+              product.details.warranty.trim() !==
+                "" && (
+                <div className="border-t border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      toggleSection(
+                        "warranty"
+                      )
+                    }
+                    className="w-full py-5 flex items-center justify-between text-left"
+                  >
+                    <div className="flex items-center gap-3">
+                      <FiShield className="text-xl" />
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    toggleSection(
-                      "warranty"
-                    )
-                  }
-                  className="w-full py-5 flex items-center justify-between text-left"
-                >
+                      <h2 className="text-lg font-bold">
+                        Warranty
+                      </h2>
+                    </div>
 
-                  <div className="flex items-center gap-3">
-
-                    <FiShield className="text-xl" />
-
-                    <h2 className="text-lg font-bold">
-                      Warranty
-                    </h2>
-
-                  </div>
+                    {openSection ===
+                    "warranty" ? (
+                      <FiChevronUp />
+                    ) : (
+                      <FiChevronDown />
+                    )}
+                  </button>
 
                   {openSection ===
-                  "warranty" ? (
-                    <FiChevronUp />
-                  ) : (
-                    <FiChevronDown />
+                    "warranty" && (
+                    <div className="pb-6 text-gray-600 leading-7 whitespace-pre-line">
+                      {
+                        product.details
+                          .warranty
+                      }
+                    </div>
                   )}
-
-                </button>
-
-                {openSection ===
-                  "warranty" && (
-                  <div className="pb-6 text-gray-600 leading-7 whitespace-pre-line">
-                    {
-                      product.details
-                        .warranty
-                    }
-                  </div>
-                )}
-
-              </div>
-            )}
+                </div>
+              )}
 
             {/* ==================================================
                 TAGS
@@ -2193,33 +2279,26 @@ const isSelected =
             ) &&
               product.tags.length > 0 && (
                 <div className="border-t border-gray-200 pt-6">
-
                   <div className="flex items-center gap-2 flex-wrap">
-
                     <span className="font-semibold text-sm">
                       Tags:
                     </span>
 
                     {product.tags.map(
-                      (tag) => (
+                      (tag, index) => (
                         <span
-                          key={tag}
+                          key={`${tag}-${index}`}
                           className="px-3 py-1.5 rounded-full bg-gray-100 text-xs text-gray-600"
                         >
                           #{tag}
                         </span>
                       )
                     )}
-
                   </div>
-
                 </div>
               )}
-
           </div>
-
         </section>
-
       </main>
     </>
   );
