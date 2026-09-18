@@ -405,10 +405,10 @@ const ProductDetails = () => {
         ? [product.image]
         : [];
 
-    const images =
-      variantImages.length > 0
-        ? variantImages
-        : mainImages;
+    const images = [
+  ...mainImages,
+  ...variantImages,
+];
 
     return [
       ...new Set(
