@@ -367,13 +367,13 @@ const ProductUi = () => {
                     ★★★★★
                   </div>
 
-                  <span className="text-xs text-gray-400">
+                  {/* <span className="text-xs text-gray-400">
                     (
                     {Number(
                       product?.rating
                     ) || 0}
                     )
-                  </span>
+                  </span> */}
 
                   {Number(product?.reviews) > 0 && (
                     <span className="text-xs text-gray-300">
@@ -415,7 +415,7 @@ const ProductUi = () => {
                       to={`/ProductDetails/${currentProductId}`}
                       className="shrink-0 bg-black hover:bg-amber-500 text-white px-4 py-2.5 rounded-xl font-medium text-sm transition-all duration-300 hover:shadow-lg"
                     >
-                      Select
+                      Order Now
                     </Link>
 
                   ) : (

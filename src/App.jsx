@@ -19,8 +19,7 @@ function App() {
         
         {/* <NavNews></NavNews> */}
         <ProductUi></ProductUi>
-        <ProductUi></ProductUi>
-        <ProductUi></ProductUi>
+        
         {/* <Footer></Footer> */}
       </div>
     </>
