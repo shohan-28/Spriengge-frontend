@@ -8,8 +8,8 @@ const SideCart = () => {
      const ProductData = useSelector ((state)=> state.product.product);
   
   const cartItems = useSelector(
-    (state) => state.cart.cart
-  );
+    (state) => state.cart?.items || []
+);
 
   const cartCount = cartItems.reduce(
     (total, item) => total + item.quantity,
