@@ -13,12 +13,10 @@ const Navbar = () => {
     (state) => state.cart?.items || []
 );
 
-  const cartCount = Array.isArray(cartItems)
-  ? cartItems.reduce(
-      (total, item) => total + (Number(item?.quantity) || 0),
-      0
-    )
-  : 0;
+  const cartCount = cartItems.reduce(
+    (total, item) => total + item.quantity,
+    0
+  );
 
   return (
     <div className="bg-transparent w-[90%] mx-auto">
