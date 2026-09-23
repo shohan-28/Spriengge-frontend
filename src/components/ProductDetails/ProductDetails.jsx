@@ -1328,15 +1328,24 @@ const ProductDetails = () => {
                           variant.sizes.length >
                             0;
 
-                        const variantSizes = Array.isArray(variant?.sizes)
-  ? variant.sizes
-  : [];
-
-const variantStock = variantSizes.reduce(
-  (total, size) =>
-    total + Number(size?.stock || 0),
-  0
-);
+                        const variantStock =
+                          hasSizes
+                            ? variant.sizes.reduce(
+                                (
+                                  total,
+                                  size
+                                ) =>
+                                  total +
+                                  Number(
+                                    size?.stock ||
+                                      0
+                                  ),
+                                0
+                              )
+                            : Number(
+                                variant?.stock ||
+                                  0
+                              );
 
                         const isOutOfStock =
                           variantStock <= 0;
