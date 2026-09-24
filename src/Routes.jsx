@@ -10,6 +10,7 @@ import CartPage from "./components/CartPage/CartPage";
 import Checkout from "./components/CheckOut/CheckOut";
 import SideCart from "./components/SideCart/SideCart";
 import MakeupOne from "./components/LandingPage/MakeupOne";
+import Products from "./components/Products/Products";
 
 const router = createBrowserRouter([
   {
@@ -30,6 +31,11 @@ const router = createBrowserRouter([
       {
         path: "/About",
         element: <About />,
+      },
+
+      {
+        path: "/Products",
+        element: <Products />,
       },
 
       {
