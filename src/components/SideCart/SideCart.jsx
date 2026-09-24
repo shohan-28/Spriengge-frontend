@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 
 const SideCart = () => {
 
-     const ProductData = useSelector ((state)=> state.product.product);
+   
   
   const cartItems = useSelector(
     (state) => state.cart?.items || []

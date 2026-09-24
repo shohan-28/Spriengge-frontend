@@ -7,7 +7,7 @@ import { Link } from "react-router-dom";
 import CartPage from './../CartPage/CartPage';
 
 const Navbar = () => {
-  const ProductData = useSelector ((state)=> state.product.product);
+ 
   
   const cartItems = useSelector(
     (state) => state.cart?.items || []
