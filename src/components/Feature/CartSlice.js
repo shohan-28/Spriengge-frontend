@@ -212,6 +212,10 @@ const findCartItemIndex = (
   state,
   payload
 ) => {
+  if (!Array.isArray(state.items)) {
+    state.items = [];
+  }
+
   if (!payload) {
     return -1;
   }
@@ -294,6 +298,9 @@ const findCartItemIndex = (
 const recalculateCart = (
   state
 ) => {
+  if (!Array.isArray(state.items)) {
+    state.items = [];
+  }
   state.totalQuantity =
     state.items.reduce(
       (sum, item) =>

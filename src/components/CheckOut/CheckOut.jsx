@@ -1090,16 +1090,23 @@ const Checkout = () => {
       /* ERROR POPUP */
 
       setPopup({
-        open: true,
-        type: "error",
-        title: "Order Failed",
-        message:
-          error?.message ||
-          "Something went wrong while placing your order.",
-        orderId: "",
-        total: 0,
-        quantity: 0,
-      });
+  open: true,
+  type: "error",
+  title: "Order Failed",
+  message:
+    error?.message ||
+    "Something went wrong while placing your order.",
+
+  orderId: "",
+  total: 0,
+  quantity: 0,
+
+  support: {
+    facebook: "https://www.facebook.com/spriengge.shop",
+    mobile: "01XXXXXXXXX",
+    whatsapp: "01XXXXXXXXX",
+  },
+});
     } finally {
       setLoading(false);
     }
@@ -1397,7 +1404,7 @@ const Checkout = () => {
                       onChange={
                         handleChange
                       }
-                      placeholder="01712345678"
+                      placeholder="017xxxxxxxx"
                       maxLength={11}
                       autoComplete="tel"
                       inputMode="numeric"
@@ -2332,26 +2339,65 @@ const Checkout = () => {
 
               {/* ERROR SMALL BOX */}
 
-              {popup.type ===
-                "error" && (
-                <div className="mt-5 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-left">
+              {popup.type === "error" && popup.support && (
+  <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+    <p className="text-sm font-medium text-gray-700">
+      অর্ডার করতে কি কোনো সমস্যা হচ্ছে?
+    </p>
 
-                  <div className="flex gap-3">
+    <p className="mt-1 text-xs text-gray-500">
+      সমস্যাটি সমাধান না হলে আমাদের Facebook পেজে যোগাযোগ করুন অথবা WhatsApp-এর মাধ্যমে সরাসরি অর্ডার করুন।
+    </p>
 
-                    <FiAlertCircle
-                      className="mt-0.5 shrink-0 text-red-500"
-                      size={16}
-                    />
+    {/* Facebook */}
+    <a
+      href={popup.support.facebook}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="mt-4 flex items-center justify-center rounded-xl bg-[#1877F2] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+    >
+      Order / Contact on Facebook
+    </a>
 
-                    <p className="text-xs leading-5 text-red-700">
-                      Please check the information
-                      and try again.
-                    </p>
+    {/* Mobile */}
+    <div className="mt-3 flex items-center justify-between rounded-xl bg-white px-3 py-2.5">
+      <div>
+        <p className="text-[11px] text-gray-400">Mobile</p>
+        <p className="text-sm font-semibold text-gray-800">
+          {popup.support.mobile}
+        </p>
+      </div>
 
-                  </div>
+      <button
+        onClick={() =>
+          navigator.clipboard.writeText(popup.support.mobile)
+        }
+        className="rounded-lg bg-gray-100 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-200"
+      >
+        Copy
+      </button>
+    </div>
 
-                </div>
-              )}
+    {/* WhatsApp */}
+    <div className="mt-2 flex items-center justify-between rounded-xl bg-white px-3 py-2.5">
+      <div>
+        <p className="text-[11px] text-gray-400">WhatsApp</p>
+        <p className="text-sm font-semibold text-gray-800">
+          {popup.support.whatsapp}
+        </p>
+      </div>
+
+      <button
+        onClick={() =>
+          navigator.clipboard.writeText(popup.support.whatsapp)
+        }
+        className="rounded-lg bg-gray-100 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-200"
+      >
+        Copy
+      </button>
+    </div>
+  </div>
+)}
 
               {/* ACTION */}
 

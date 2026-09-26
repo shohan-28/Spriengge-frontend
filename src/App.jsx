@@ -5,6 +5,7 @@ import Footer from './components/Footer/Footer';
 import ProductUi from './components/ProductUi/ProductUi';
 import NavbarLink from './components/Navbar/NavbarLink';
 import NavNews from './components/Navbar/NavNews';
+import CarouselOne from './Carousel/CarouselOne';
 
 function App() {
 
@@ -18,6 +19,7 @@ function App() {
         {/* </div> */}
         
         {/* <NavNews></NavNews> */}
+        <CarouselOne></CarouselOne>
         <ProductUi></ProductUi>
         
         {/* <Footer></Footer> */}

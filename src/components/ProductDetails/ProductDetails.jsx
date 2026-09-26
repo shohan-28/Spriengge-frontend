@@ -3,6 +3,8 @@ import { useDispatch, useSelector } from "react-redux";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 
+import { ArrowRight } from "lucide-react";
+import { FaFacebookF } from "react-icons/fa";
 import {
   FiHeart,
   FiMinus,
@@ -21,6 +23,7 @@ import {
   FiHome,
   FiTag,
   FiBox,
+  
 } from "react-icons/fi";
 
 import { IoStar, IoStarOutline } from "react-icons/io5";
@@ -1627,6 +1630,31 @@ const ProductDetails = () => {
                   </button>
                 </div>
               </div>
+
+                    <div className="mt-4">
+                                    <a
+  href="https://www.facebook.com/spriengge.shop"
+  target="_blank"
+  rel="noopener noreferrer"
+  className="group inline-flex items-center gap-3 px-6 py-3.5 rounded-xl
+  bg-[#1877F2] text-white font-semibold
+  shadow-lg shadow-blue-500/20
+  hover:bg-[#166FE5] hover:shadow-xl hover:shadow-blue-500/30
+  hover:-translate-y-0.5
+  transition-all duration-300"
+>
+  <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/15">
+    <FaFacebookF size={16} />
+  </span>
+
+  <span>Order via Facebook</span>
+
+  <ArrowRight
+    size={18}
+    className="group-hover:translate-x-1 transition-transform duration-300"
+  />
+</a>
+                    </div>
 
               {/* =================================================
                   ACTION BUTTONS

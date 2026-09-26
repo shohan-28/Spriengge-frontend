@@ -28,11 +28,13 @@ const ProductUi = () => {
   ========================================================= */
 
   const handleAddToCart = (product) => {
+      console.log("BUTTON CLICKED:", product);
     if (!product) return;
 
     const productId = Number(
       product?.productId ?? product?.id
     );
+      console.log("PRODUCT ID:", productId);
 
     if (!Number.isFinite(productId) || productId <= 0) {
       console.error(

@@ -28,7 +28,7 @@ const Footer = () => {
 
                         <div className="flex gap-3 mt-6">
                             <a
-                                href="#"
+                                href="https://www.facebook.com/spriengge.shop"
                                 className="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center hover:bg-violet-600 hover:text-white hover:border-violet-600 duration-300"
                             >
                                 <FaFacebookF />

@@ -11,6 +11,8 @@ import Checkout from "./components/CheckOut/CheckOut";
 import SideCart from "./components/SideCart/SideCart";
 import MakeupOne from "./components/LandingPage/MakeupOne";
 import Products from "./components/Products/Products";
+import CarouselOne from "./Carousel/CarouselOne";
+import FooterTwo from "./components/Footer/FooterTwo";
 
 const router = createBrowserRouter([
   {
@@ -67,6 +69,15 @@ const router = createBrowserRouter([
         path: "/MakeupOne/:id",
         element: <MakeupOne />,
       },
+
+      {
+        path: "/CarouselOne",
+        element: <CarouselOne />,
+      },
+      {
+        path: "/FooterTwo",
+        element: <FooterTwo />,
+      }
     ],
   },
 ]);
