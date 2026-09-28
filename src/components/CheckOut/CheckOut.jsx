@@ -1103,8 +1103,8 @@ const Checkout = () => {
 
   support: {
     facebook: "https://www.facebook.com/spriengge.shop",
-    mobile: "01XXXXXXXXX",
-    whatsapp: "01XXXXXXXXX",
+    mobile: "01341783631",
+    whatsapp: "01341783631",
   },
 });
     } finally {

@@ -54,7 +54,7 @@ const Contact = () => {
                 <div>
                   <p className="text-sm text-gray-400">Email</p>
                   <p className="mt-1 font-medium">
-                    hello@example.com
+                    spriengge@gmail.com
                   </p>
                 </div>
               </div>
@@ -67,7 +67,7 @@ const Contact = () => {
                 <div>
                   <p className="text-sm text-gray-400">Phone</p>
                   <p className="mt-1 font-medium">
-                    +880 1234 567890
+                    01341783631
                   </p>
                 </div>
               </div>
@@ -93,7 +93,7 @@ const Contact = () => {
                 <div>
                   <p className="text-sm text-gray-400">Working Hours</p>
                   <p className="mt-1 font-medium">
-                    Sat - Thu, 9AM - 6PM
+                    24/7, 8AM - 11PM
                   </p>
                 </div>
               </div>
