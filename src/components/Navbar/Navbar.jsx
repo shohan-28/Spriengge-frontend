@@ -23,7 +23,7 @@ const Navbar = () => {
       <div className="flex justify-between py-4 rounded-l-3xl rounded-r-3xl">
         <div className="">
           <img
-            src="https://i.postimg.cc/pX2BLWCt/Spriengge-logo-1.jpg"
+            src="https://i.postimg.cc/RhqVgn94/Spriengge-logo-3.png"
             alt=""
             className="h-10 lg:h-13 w-full object-contain"
           />
