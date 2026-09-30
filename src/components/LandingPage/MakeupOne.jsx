@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
+
 import {
   FiCheck,
   FiMinus,
@@ -9,15 +10,13 @@ import {
   FiStar,
   FiArrowRight,
   FiX,
-  FiMapPin,
   FiClock,
+  FiShoppingBag,
 } from "react-icons/fi";
 
-import { districtData } from "../DistrictData/DistrictData";
-
-// ======================================================
-// API CONFIG
-// ======================================================
+/* =========================================================
+   API CONFIG
+========================================================= */
 
 const RAW_API_URL =
   import.meta.env.VITE_API_URL ||
@@ -29,9 +28,9 @@ const API_URL = RAW_API_URL
   .replace(/\/products$/, "")
   .replace(/\/orders$/, "");
 
-// ======================================================
-// HELPERS
-// ======================================================
+/* =========================================================
+   HELPERS
+========================================================= */
 
 const normalizeProductId = (value) => {
   const numberValue = Number(value);
@@ -49,32 +48,125 @@ const cleanString = (value) => {
   return String(value).trim();
 };
 
-const getProductImage = (product) => {
+/* =========================================================
+   BACKEND IMAGE HELPERS
+
+   IMPORTANT:
+   কোনো hardcoded image URL নেই।
+
+   Backend থেকে image নেওয়ার priority:
+   1. product.image
+   2. product.images[]
+   3. product.details.images[]
+   4. product.variants[].images[]
+========================================================= */
+
+const isValidImageUrl = (value) => {
   return (
-    product?.image ||
-    product?.images?.[0] ||
-    product?.variants?.[0]?.images?.[0] ||
-    ""
+    typeof value === "string" &&
+    value.trim().length > 0
   );
 };
+
+const getProductImages = (product) => {
+  if (!product) {
+    return [];
+  }
+
+  const images = [];
+
+  /* -------------------------------------------------------
+     1. TOP LEVEL product.image
+  ------------------------------------------------------- */
+
+  if (isValidImageUrl(product?.image)) {
+    images.push(product.image.trim());
+  }
+
+  /* -------------------------------------------------------
+     2. TOP LEVEL product.images
+  ------------------------------------------------------- */
+
+  if (Array.isArray(product?.images)) {
+    product.images.forEach((image) => {
+      if (isValidImageUrl(image)) {
+        images.push(image.trim());
+      }
+    });
+  }
+
+  /* -------------------------------------------------------
+     3. details.images
+  ------------------------------------------------------- */
+
+  if (Array.isArray(product?.details?.images)) {
+    product.details.images.forEach((image) => {
+      if (isValidImageUrl(image)) {
+        images.push(image.trim());
+      }
+    });
+  }
+
+  /* -------------------------------------------------------
+     4. VARIANT IMAGES
+  ------------------------------------------------------- */
+
+  if (Array.isArray(product?.variants)) {
+    product.variants.forEach((variant) => {
+      if (Array.isArray(variant?.images)) {
+        variant.images.forEach((image) => {
+          if (isValidImageUrl(image)) {
+            images.push(image.trim());
+          }
+        });
+      }
+
+      if (isValidImageUrl(variant?.image)) {
+        images.push(variant.image.trim());
+      }
+    });
+  }
+
+  /* -------------------------------------------------------
+     REMOVE DUPLICATES
+  ------------------------------------------------------- */
+
+  return [...new Set(images)];
+};
+
+const getProductImage = (product) => {
+  const images = getProductImages(product);
+
+  return images[0] || "";
+};
+
+/* =========================================================
+   PRICE HELPERS
+
+   Backend price is the source of truth.
+========================================================= */
 
 const getProductPrice = (product) => {
   const price = Number(product?.price);
 
-  return Number.isFinite(price) && price >= 0 ? price : 0;
+  return Number.isFinite(price) && price >= 0
+    ? price
+    : 0;
 };
 
-const getProductOldPrice = (product, price) => {
+const getProductOldPrice = (product) => {
   const oldPrice = Number(product?.oldPrice);
 
-  if (Number.isFinite(oldPrice) && oldPrice > price) {
-    return oldPrice;
-  }
-
-  return price + 300;
+  return Number.isFinite(oldPrice) && oldPrice > 0
+    ? oldPrice
+    : 0;
 };
 
-const getProductDiscount = (product, price, oldPrice) => {
+const getProductDiscount = (
+  product,
+  price,
+  oldPrice
+) => {
   const productDiscount = Number(product?.discount);
 
   if (
@@ -84,54 +176,91 @@ const getProductDiscount = (product, price, oldPrice) => {
     return productDiscount;
   }
 
-  return Math.max(oldPrice - price, 0);
+  if (oldPrice > price) {
+    return oldPrice - price;
+  }
+
+  return 0;
 };
 
-// ======================================================
-// COMPONENT
-// ======================================================
+/* =========================================================
+   PRODUCT LIST NORMALIZER
+========================================================= */
+
+const getProductsFromResponse = (data) => {
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (Array.isArray(data?.products)) {
+    return data.products;
+  }
+
+  if (Array.isArray(data?.data)) {
+    return data.data;
+  }
+
+  if (Array.isArray(data?.data?.products)) {
+    return data.data.products;
+  }
+
+  if (Array.isArray(data?.result)) {
+    return data.result;
+  }
+
+  return [];
+};
+
+/* =========================================================
+   COMPONENT
+========================================================= */
 
 const MakeupOne = () => {
   const { id } = useParams();
 
-  // ======================================================
-  // PRODUCT STATE
-  // ======================================================
+  /* =======================================================
+     PRODUCT
+  ======================================================= */
 
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [productError, setProductError] = useState("");
 
-  // ======================================================
-  // QUANTITY
-  // ======================================================
+  /* =======================================================
+     QUANTITY
+  ======================================================= */
 
   const [quantity, setQuantity] = useState(1);
 
-  // ======================================================
-  // FORM
-  // ======================================================
+  /* =======================================================
+     FORM
+  ======================================================= */
 
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
-    district: "",
-    thana: "",
     address: "",
     note: "",
+    deliveryArea: "",
   });
 
-  // ======================================================
-  // ORDER STATE
-  // ======================================================
+  /* =======================================================
+     ORDER
+  ======================================================= */
 
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [successOrder, setSuccessOrder] = useState(null);
 
-  // ======================================================
-  // COUNTDOWN
-  // ======================================================
+  /* =======================================================
+     IMAGE SLIDER
+  ======================================================= */
+
+  const [activeImage, setActiveImage] = useState(0);
+
+  /* =======================================================
+     COUNTDOWN
+  ======================================================= */
 
   const [timeLeft, setTimeLeft] = useState({
     hours: 1,
@@ -139,9 +268,9 @@ const MakeupOne = () => {
     seconds: 59,
   });
 
-  // ======================================================
-  // LOAD PRODUCT
-  // ======================================================
+  /* =======================================================
+     LOAD PRODUCT
+  ======================================================= */
 
   useEffect(() => {
     let cancelled = false;
@@ -151,6 +280,7 @@ const MakeupOne = () => {
         setLoading(true);
         setProductError("");
         setProduct(null);
+        setActiveImage(0);
 
         const productId = normalizeProductId(id);
 
@@ -159,7 +289,7 @@ const MakeupOne = () => {
         }
 
         const response = await fetch(
-          `${API_URL}/products/${encodeURIComponent(productId)}`
+          `${API_URL}/products`
         );
 
         let data = null;
@@ -178,14 +308,71 @@ const MakeupOne = () => {
           );
         }
 
-        const loadedProduct =
-          data?.product ||
-          data?.data ||
-          data;
+        const products = getProductsFromResponse(data);
+
+        if (!products.length) {
+          throw new Error("No products found.");
+        }
+
+        /* ---------------------------------------------------
+           FIND PRODUCT
+        --------------------------------------------------- */
+
+        const loadedProduct = products.find((item) => {
+          const itemProductId = normalizeProductId(
+            item?.productId ?? item?.id
+          );
+
+          return itemProductId === productId;
+        });
 
         if (!loadedProduct) {
-          throw new Error("Product not found.");
+          throw new Error(
+            `Product with ID ${productId} was not found.`
+          );
         }
+
+        /* ---------------------------------------------------
+           BACKEND DEBUG
+        --------------------------------------------------- */
+
+        console.log(
+          "================================="
+        );
+
+        console.log(
+          "LANDING PRODUCT FROM BACKEND:",
+          loadedProduct
+        );
+
+        console.log(
+          "LANDING BACKEND PRODUCT IMAGE:",
+          loadedProduct?.image
+        );
+
+        console.log(
+          "LANDING BACKEND PRODUCT IMAGES:",
+          loadedProduct?.images
+        );
+
+        console.log(
+          "LANDING BACKEND VARIANT IMAGES:",
+          loadedProduct?.variants
+        );
+
+        console.log(
+          "LANDING BACKEND PRICE:",
+          loadedProduct?.price
+        );
+
+        console.log(
+          "LANDING BACKEND OLD PRICE:",
+          loadedProduct?.oldPrice
+        );
+
+        console.log(
+          "================================="
+        );
 
         const loadedProductId = normalizeProductId(
           loadedProduct?.productId ??
@@ -198,14 +385,63 @@ const MakeupOne = () => {
           );
         }
 
+        /* ---------------------------------------------------
+           GET BACKEND IMAGES
+        --------------------------------------------------- */
+
+        const backendImages =
+          getProductImages(loadedProduct);
+
+        console.log(
+          "LANDING BACKEND IMAGES USED:",
+          backendImages
+        );
+
+        /* ---------------------------------------------------
+           NORMALIZE PRODUCT
+
+           IMPORTANT:
+           কোনো external/hardcoded image এখানে যোগ করা হচ্ছে না।
+        --------------------------------------------------- */
+
         const normalizedProduct = {
           ...loadedProduct,
+
           productId: loadedProductId,
-          image: getProductImage(loadedProduct),
+
+          image:
+            backendImages[0] || "",
+
+          images: backendImages,
+
+          price:
+            Number(loadedProduct?.price) || 0,
+
+          oldPrice:
+            Number(loadedProduct?.oldPrice) || 0,
+
+          discount:
+            Number(loadedProduct?.discount) || 0,
         };
+
+        console.log(
+          "FINAL LANDING PRODUCT:",
+          normalizedProduct
+        );
+
+        console.log(
+          "FINAL LANDING IMAGES:",
+          normalizedProduct.images
+        );
+
+        console.log(
+          "FINAL LANDING PRICE:",
+          normalizedProduct.price
+        );
 
         if (!cancelled) {
           setProduct(normalizedProduct);
+          setActiveImage(0);
         }
       } catch (error) {
         console.error(
@@ -233,14 +469,67 @@ const MakeupOne = () => {
     };
   }, [id]);
 
-  // ======================================================
-  // COUNTDOWN
-  // ======================================================
+  /* =======================================================
+     PRODUCT IMAGES
+
+     Backend image list
+  ======================================================= */
+
+  const productImages = useMemo(() => {
+    const images = getProductImages(product);
+
+    return images;
+  }, [product]);
+
+  /* =======================================================
+     KEEP ACTIVE IMAGE VALID
+  ======================================================= */
+
+  useEffect(() => {
+    if (!productImages.length) {
+      setActiveImage(0);
+      return;
+    }
+
+    if (activeImage >= productImages.length) {
+      setActiveImage(0);
+    }
+  }, [productImages, activeImage]);
+
+  /* =======================================================
+     AUTO IMAGE SLIDER
+
+     Backend-এ একাধিক image থাকলেই slider চলবে।
+  ======================================================= */
+
+  useEffect(() => {
+    if (productImages.length <= 1) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setActiveImage((prev) =>
+        prev === productImages.length - 1
+          ? 0
+          : prev + 1
+      );
+    }, 4500);
+
+    return () => clearInterval(timer);
+  }, [productImages.length]);
+
+  /* =======================================================
+     COUNTDOWN
+  ======================================================= */
 
   useEffect(() => {
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
-        let { hours, minutes, seconds } = prev;
+        let {
+          hours,
+          minutes,
+          seconds,
+        } = prev;
 
         if (seconds > 0) {
           seconds -= 1;
@@ -273,17 +562,17 @@ const MakeupOne = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // ======================================================
-  // PRODUCT INFORMATION
-  // ======================================================
+  /* =======================================================
+     PRODUCT INFORMATION
+  ======================================================= */
 
   const price = useMemo(() => {
     return getProductPrice(product);
   }, [product]);
 
   const oldPrice = useMemo(() => {
-    return getProductOldPrice(product, price);
-  }, [product, price]);
+    return getProductOldPrice(product);
+  }, [product]);
 
   const discount = useMemo(() => {
     return getProductDiscount(
@@ -307,23 +596,20 @@ const MakeupOne = () => {
     return null;
   }, [product]);
 
-  // ======================================================
-  // DELIVERY
-  // ======================================================
+  /* =======================================================
+     DELIVERY
+  ======================================================= */
 
-  const isDhaka =
-    cleanString(formData.district).toLowerCase() ===
-    "dhaka";
-
-  const deliveryCharge = formData.district
-    ? isDhaka
+  const deliveryCharge =
+    formData.deliveryArea === "inside-dhaka"
       ? 60
-      : 100
-    : 0;
+      : formData.deliveryArea === "outside-dhaka"
+      ? 100
+      : 0;
 
-  // ======================================================
-  // TOTAL
-  // ======================================================
+  /* =======================================================
+     TOTAL
+  ======================================================= */
 
   const safeQuantity = Math.max(
     1,
@@ -331,12 +617,11 @@ const MakeupOne = () => {
   );
 
   const subtotal = price * safeQuantity;
-
   const total = subtotal + deliveryCharge;
 
-  // ======================================================
-  // INPUT CHANGE
-  // ======================================================
+  /* =======================================================
+     INPUT
+  ======================================================= */
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -347,9 +632,9 @@ const MakeupOne = () => {
     }));
   };
 
-  // ======================================================
-  // PHONE CHANGE
-  // ======================================================
+  /* =======================================================
+     PHONE
+  ======================================================= */
 
   const handlePhoneChange = (e) => {
     const value = e.target.value
@@ -362,21 +647,27 @@ const MakeupOne = () => {
     }));
   };
 
-  // ======================================================
-  // DISTRICT CHANGE
-  // ======================================================
+  /* =======================================================
+     DELIVERY AREA
+  ======================================================= */
 
-  const handleDistrictChange = (e) => {
+  const handleDeliveryAreaChange = (area) => {
+    if (
+      area !== "inside-dhaka" &&
+      area !== "outside-dhaka"
+    ) {
+      return;
+    }
+
     setFormData((prev) => ({
       ...prev,
-      district: e.target.value,
-      thana: "",
+      deliveryArea: area,
     }));
   };
 
-  // ======================================================
-  // QUANTITY
-  // ======================================================
+  /* =======================================================
+     QUANTITY
+  ======================================================= */
 
   const increaseQuantity = () => {
     setQuantity((prev) => {
@@ -408,9 +699,9 @@ const MakeupOne = () => {
     });
   };
 
-  // ======================================================
-  // SUBMIT ORDER
-  // ======================================================
+  /* =======================================================
+     SUBMIT ORDER
+  ======================================================= */
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -419,9 +710,7 @@ const MakeupOne = () => {
       return;
     }
 
-    // ----------------------------------------------------
-    // PRODUCT SAFETY
-    // ----------------------------------------------------
+    /* PRODUCT */
 
     if (!product) {
       alert("Product not found.");
@@ -429,8 +718,7 @@ const MakeupOne = () => {
     }
 
     const productId = normalizeProductId(
-      product?.productId ??
-        product?.id
+      product?.productId ?? product?.id
     );
 
     if (!productId) {
@@ -438,86 +726,75 @@ const MakeupOne = () => {
       return;
     }
 
-    // ----------------------------------------------------
-    // NAME
-    // ----------------------------------------------------
+    /* NAME */
 
-    const customerName =
-      cleanString(formData.name);
+    const customerName = cleanString(
+      formData.name
+    );
 
     if (!customerName) {
-      alert("Please enter your name.");
+      alert("দয়া করে আপনার নাম লিখুন।");
       return;
     }
 
-    // ----------------------------------------------------
-    // PHONE
-    // ----------------------------------------------------
+    /* PHONE */
 
-    const customerPhone =
-      cleanString(formData.phone);
+    const customerPhone = cleanString(
+      formData.phone
+    );
 
     if (!/^01\d{9}$/.test(customerPhone)) {
       alert(
-        "Please enter a valid 11 digit Bangladeshi phone number."
+        "দয়া করে সঠিক ১১ সংখ্যার বাংলাদেশি মোবাইল নম্বর দিন।"
       );
       return;
     }
 
-    // ----------------------------------------------------
-    // DISTRICT
-    // ----------------------------------------------------
+    /* ADDRESS */
 
-    const customerDistrict =
-      cleanString(formData.district);
-
-    if (!customerDistrict) {
-      alert("Please select your district.");
-      return;
-    }
-
-    // ----------------------------------------------------
-    // THANA
-    // ----------------------------------------------------
-
-    const customerThana =
-      cleanString(formData.thana);
-
-    if (!customerThana) {
-      alert("Please select your thana.");
-      return;
-    }
-
-    // ----------------------------------------------------
-    // ADDRESS
-    // ----------------------------------------------------
-
-    const customerAddress =
-      cleanString(formData.address);
+    const customerAddress = cleanString(
+      formData.address
+    );
 
     if (!customerAddress) {
-      alert("Please enter your delivery address.");
+      alert(
+        "দয়া করে আপনার সম্পূর্ণ ঠিকানা লিখুন।"
+      );
       return;
     }
 
-    // ----------------------------------------------------
-    // QUANTITY
-    // ----------------------------------------------------
+    /* DELIVERY AREA */
+
+    const customerDeliveryArea = cleanString(
+      formData.deliveryArea
+    );
+
+    if (
+      customerDeliveryArea !== "inside-dhaka" &&
+      customerDeliveryArea !== "outside-dhaka"
+    ) {
+      alert(
+        "দয়া করে ডেলিভারি এলাকা নির্বাচন করুন।"
+      );
+      return;
+    }
+
+    /* QUANTITY */
 
     const finalQuantity = Math.max(
       1,
       Math.floor(Number(quantity) || 1)
     );
 
-    // ----------------------------------------------------
-    // STOCK CHECK
-    // ----------------------------------------------------
+    /* STOCK */
 
     if (
       productStock !== null &&
       productStock <= 0
     ) {
-      alert("Sorry, this product is currently out of stock.");
+      alert(
+        "দুঃখিত, এই পণ্যটি বর্তমানে স্টকে নেই।"
+      );
       return;
     }
 
@@ -526,20 +803,19 @@ const MakeupOne = () => {
       finalQuantity > productStock
     ) {
       alert(
-        `Only ${productStock} item${
-          productStock > 1 ? "s" : ""
-        } available in stock.`
+        `স্টকে মাত্র ${productStock}টি পণ্য আছে।`
       );
 
       setQuantity(productStock);
+
       return;
     }
 
-    // ----------------------------------------------------
-    // PRICE
-    // ----------------------------------------------------
+    /* PRICE */
 
-    const finalPrice = getProductPrice(product);
+    const finalPrice = Number(
+      product?.price
+    );
 
     if (
       !Number.isFinite(finalPrice) ||
@@ -549,19 +825,27 @@ const MakeupOne = () => {
       return;
     }
 
-    // ----------------------------------------------------
-    // DELIVERY
-    // ----------------------------------------------------
+    /* DELIVERY CHARGE */
 
-    const finalDeliveryCharge =
-      customerDistrict.toLowerCase() ===
-      "dhaka"
-        ? 60
-        : 100;
+    let finalDeliveryCharge = 0;
 
-    // ----------------------------------------------------
-    // TOTAL
-    // ----------------------------------------------------
+    if (
+      customerDeliveryArea === "inside-dhaka"
+    ) {
+      finalDeliveryCharge = 60;
+    } else if (
+      customerDeliveryArea === "outside-dhaka"
+    ) {
+      finalDeliveryCharge = 100;
+    } else {
+      alert(
+        "দয়া করে সঠিক ডেলিভারি এলাকা নির্বাচন করুন।"
+      );
+
+      return;
+    }
+
+    /* TOTAL */
 
     const finalSubtotal =
       finalPrice * finalQuantity;
@@ -569,9 +853,7 @@ const MakeupOne = () => {
     const finalTotal =
       finalSubtotal + finalDeliveryCharge;
 
-    // ====================================================
-    // CANONICAL ORDER ITEM
-    // ====================================================
+    /* ORDER ITEM */
 
     const orderItem = {
       productId,
@@ -580,17 +862,16 @@ const MakeupOne = () => {
         cleanString(product?.name) ||
         "Product",
 
+      /* BACKEND PRODUCT IMAGE */
       productImage:
         productImage || "",
 
-      // Landing page product has no selected variant.
-      // Keep canonical variantId empty.
       variantId: "",
-
       selectedColor: "",
       selectedColorCode: "",
       selectedSize: "",
 
+      /* BACKEND PRODUCT PRICE */
       price: finalPrice,
 
       quantity: finalQuantity,
@@ -598,30 +879,19 @@ const MakeupOne = () => {
       subtotal: finalSubtotal,
     };
 
-    // ====================================================
-    // FINAL ORDER PAYLOAD
-    // ====================================================
+    /* ORDER PAYLOAD */
 
     const orderData = {
-      // --------------------------------------------------
-      // CUSTOMER
-      // --------------------------------------------------
-
       name: customerName,
 
       phone: customerPhone,
-
-      district: customerDistrict,
-
-      thana: customerThana,
 
       address: customerAddress,
 
       note: cleanString(formData.note),
 
-      // --------------------------------------------------
-      // PRODUCT
-      // --------------------------------------------------
+      deliveryArea:
+        customerDeliveryArea,
 
       productId,
 
@@ -629,44 +899,23 @@ const MakeupOne = () => {
         cleanString(product?.name) ||
         "Product",
 
+      /* BACKEND PRODUCT IMAGE */
       productImage:
         productImage || "",
 
-      // --------------------------------------------------
-      // QUANTITY
-      // --------------------------------------------------
+      /* BACKEND PRODUCT PRICE */
+      price: finalPrice,
 
       quantity: finalQuantity,
 
-      // --------------------------------------------------
-      // PRICE
-      // --------------------------------------------------
-
-      price: finalPrice,
-
       subtotal: finalSubtotal,
 
-      // --------------------------------------------------
-      // DELIVERY
-      // --------------------------------------------------
-
-      deliveryCharge: finalDeliveryCharge,
-
-      // --------------------------------------------------
-      // TOTAL
-      // --------------------------------------------------
+      deliveryCharge:
+        finalDeliveryCharge,
 
       total: finalTotal,
 
-      // --------------------------------------------------
-      // ITEMS
-      // --------------------------------------------------
-
       items: [orderItem],
-
-      // --------------------------------------------------
-      // ORDER SOURCE
-      // --------------------------------------------------
 
       orderSource: "landing-page",
 
@@ -678,13 +927,44 @@ const MakeupOne = () => {
     };
 
     console.log(
+      "================================="
+    );
+
+    console.log(
       "FINAL LANDING ORDER:",
       orderData
     );
 
-    // ====================================================
-    // SEND ORDER
-    // ====================================================
+    console.log(
+      "BACKEND PRODUCT IMAGE:",
+      productImage
+    );
+
+    console.log(
+      "BACKEND PRODUCT PRICE:",
+      product?.price
+    );
+
+    console.log(
+      "FINAL ORDER PRICE:",
+      finalPrice
+    );
+
+    console.log(
+      "DELIVERY AREA SENT:",
+      orderData.deliveryArea
+    );
+
+    console.log(
+      "FINAL ORDER TOTAL:",
+      finalTotal
+    );
+
+    console.log(
+      "================================="
+    );
+
+    /* SEND ORDER */
 
     try {
       setSubmitting(true);
@@ -719,16 +999,15 @@ const MakeupOne = () => {
         throw new Error(
           data?.message ||
             data?.error ||
-            "Order failed. Please try again."
+            "অর্ডার সম্পন্ন করা যায়নি। আবার চেষ্টা করুন।"
         );
       }
 
-      // ==================================================
-      // SUCCESS
-      // ==================================================
+      /* SUCCESS */
 
       setSuccessOrder({
         ...orderData,
+
         orderId:
           data?.order?._id ||
           data?.data?._id ||
@@ -741,10 +1020,9 @@ const MakeupOne = () => {
       setFormData({
         name: "",
         phone: "",
-        district: "",
-        thana: "",
         address: "",
         note: "",
+        deliveryArea: "",
       });
 
       setQuantity(1);
@@ -763,186 +1041,234 @@ const MakeupOne = () => {
     }
   };
 
-  // ======================================================
-  // LOADING
-  // ======================================================
+  /* =======================================================
+     LOADING
+  ======================================================= */
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f7f7f5]">
-        <div className="flex flex-col items-center">
-          <div className="w-8 h-8 border-[3px] border-gray-200 border-t-black rounded-full animate-spin" />
+      <div className="min-h-screen bg-[#f7f5f0] flex items-center justify-center px-5">
+        <div className="text-center">
+          <div className="relative w-14 h-14 mx-auto">
+            <div className="absolute inset-0 rounded-full border border-black/10" />
 
-          <p className="mt-4 text-xs text-gray-400 font-medium">
-            Loading product...
+            <div className="absolute inset-0 rounded-full border-[2px] border-transparent border-t-black animate-spin" />
+
+            <div className="absolute inset-3 rounded-full bg-black flex items-center justify-center">
+              <span className="text-white text-[9px] font-black">
+                S
+              </span>
+            </div>
+          </div>
+
+          <p className="mt-5 text-[10px] uppercase tracking-[.2em] font-bold text-gray-400">
+            Preparing your experience
           </p>
         </div>
       </div>
     );
   }
 
-  // ======================================================
-  // PRODUCT NOT FOUND
-  // ======================================================
+  /* =======================================================
+     PRODUCT NOT FOUND
+  ======================================================= */
 
   if (!product) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#f7f7f5] px-5 text-center">
-        <div className="w-16 h-16 rounded-full bg-red-50 text-red-500 flex items-center justify-center">
-          <FiX size={28} />
+      <div className="min-h-screen bg-[#f7f5f0] flex flex-col items-center justify-center px-5 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-white border border-black/5 shadow-sm flex items-center justify-center text-red-500">
+          <FiX size={25} />
         </div>
 
-        <h1 className="mt-5 text-3xl font-black">
+        <h1 className="mt-6 text-3xl sm:text-4xl font-black tracking-tight">
           Product Not Found
         </h1>
 
-        <p className="mt-3 text-gray-500 max-w-md">
+        <p className="mt-3 max-w-md text-sm text-gray-500 leading-6">
           {productError ||
             "Sorry, this product is currently unavailable."}
         </p>
 
         <a
           href="/"
-          className="mt-6 px-6 py-3 rounded-full bg-black text-white font-semibold"
+          className="mt-7 inline-flex items-center gap-2 px-6 h-12 rounded-xl bg-[#171717] text-white text-sm font-bold hover:bg-black transition"
         >
           Back to Home
+
+          <FiArrowRight size={14} />
         </a>
       </div>
     );
   }
 
-  // ======================================================
-  // UI
-  // ======================================================
+  /* =======================================================
+     MAIN UI
+  ======================================================= */
 
   return (
-    <div className="min-h-screen bg-[#f7f7f5] text-gray-900">
+    <div className="min-h-screen bg-[#f7f5f0] text-[#171717] overflow-hidden">
+      <style>{`
+        @keyframes floatProduct {
+          0%, 100% {
+            transform: translateY(0);
+          }
 
-      {/* =====================================
+          50% {
+            transform: translateY(-10px);
+          }
+        }
+
+        @keyframes softPulse {
+          0%, 100% {
+            transform: scale(.95);
+            opacity: .4;
+          }
+
+          50% {
+            transform: scale(1.06);
+            opacity: .7;
+          }
+        }
+
+        @keyframes revealUp {
+          from {
+            opacity: 0;
+            transform: translateY(24px);
+          }
+
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .float-product {
+          animation:
+            floatProduct
+            5s
+            ease-in-out
+            infinite;
+        }
+
+        .soft-pulse {
+          animation:
+            softPulse
+            5s
+            ease-in-out
+            infinite;
+        }
+
+        .reveal-up {
+          animation:
+            revealUp
+            .8s
+            ease-out
+            both;
+        }
+
+        .reveal-delay {
+          animation-delay: .12s;
+        }
+
+        .reveal-delay-2 {
+          animation-delay: .22s;
+        }
+
+        .image-hover {
+          transition:
+            transform
+            .7s
+            cubic-bezier(.2,.8,.2,1);
+        }
+
+        .image-card:hover .image-hover {
+          transform: scale(1.035);
+        }
+      `}</style>
+
+      {/* =====================================================
           HEADER
-      ====================================== */}
+      ===================================================== */}
 
-      <header className="absolute top-0 left-0 right-0 z-30">
-        <div className="max-w-7xl mx-auto px-5 sm:px-8 py-5">
+      
 
-          <div className="flex items-center justify-between">
+      <main>
+        {/* ===================================================
+            HERO
+        =================================================== */}
 
-            <a
-              href="/"
-              className="text-xl sm:text-2xl font-black tracking-tight"
-            >
-              Spriengge
-            </a>
+        <section className="relative min-h-screen flex items-center pt-24 pb-12 sm:pt-28 lg:pt-24">
+          <div className="pointer-events-none absolute top-10 left-[-180px] w-[420px] h-[420px] rounded-full bg-[#dce9df]/60 blur-[90px] soft-pulse" />
 
-            <div className="hidden sm:flex items-center gap-2 text-xs font-semibold text-gray-500">
-              <FiShield />
-              Secure Checkout
-            </div>
+          <div
+            className="pointer-events-none absolute right-[-180px] bottom-10 w-[430px] h-[430px] rounded-full bg-[#eadbc7]/60 blur-[100px] soft-pulse"
+            style={{
+              animationDelay: "1.5s",
+            }}
+          />
 
-          </div>
+          <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-10">
+            <div className="grid lg:grid-cols-[1.02fr_.98fr] gap-10 lg:gap-16 items-center">
 
-        </div>
-      </header>
+              {/* LEFT */}
 
-      {/* =====================================
-          MAIN
-      ====================================== */}
+              <div className="reveal-up">
+                <div className="flex flex-wrap items-center gap-2 mb-5">
+                  <span className="inline-flex items-center gap-2 rounded-full bg-[#171717] text-white px-3.5 py-2 text-[9px] sm:text-[10px] font-black uppercase tracking-[.12em]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Limited Time Offer
+                  </span>
 
-      <main className="min-h-screen flex items-center">
+                  <span className="inline-flex items-center gap-2 rounded-full bg-white/70 border border-black/[.06] px-3.5 py-2 text-[9px] sm:text-[10px] font-bold text-gray-500 backdrop-blur-xl">
+                    <FiClock size={12} />
 
-        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-10">
-
-          <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-7 lg:gap-12 items-center">
-
-            {/* =================================
-                PRODUCT
-            ================================= */}
-
-            <section>
-
-              {/* OFFER */}
-
-              <div className="flex flex-wrap items-center gap-2">
-
-                <div className="inline-flex items-center gap-2 bg-black text-white rounded-full px-4 py-2 text-[10px] sm:text-xs font-bold">
-
-                  <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
-
-                  LIMITED TIME OFFER
-
+                    {String(timeLeft.hours).padStart(
+                      1,
+                      "0"
+                    )}
+                    :
+                    {String(timeLeft.minutes).padStart(
+                      2,
+                      "0"
+                    )}
+                    :
+                    {String(timeLeft.seconds).padStart(
+                      2,
+                      "0"
+                    )}
+                  </span>
                 </div>
 
-                <div className="inline-flex items-center gap-2 bg-red-50 text-red-600 border border-red-100 rounded-full px-3 py-2 text-[10px] font-bold">
+                <p className="text-[9px] sm:text-[10px] uppercase tracking-[.3em] text-gray-400 font-black">
+                  Spriengge Essential
+                </p>
 
-                  <FiClock />
+                <h1 className="mt-4 text-[43px] sm:text-5xl lg:text-[62px] xl:text-[70px] leading-[.94] tracking-[-.06em] font-black max-w-2xl">
+                  {product.name}
+                </h1>
 
-                  {String(
-                    timeLeft.hours
-                  ).padStart(2, "0")}
-                  :
-                  {String(
-                    timeLeft.minutes
-                  ).padStart(2, "0")}
-                  :
-                  {String(
-                    timeLeft.seconds
-                  ).padStart(2, "0")}
+                <p className="mt-6 max-w-xl text-sm sm:text-base text-gray-500 leading-7">
+                  {product?.details
+                    ?.shortDescription ||
+                    product.description ||
+                    "Premium quality product designed for comfort, style and everyday use."}
+                </p>
 
-                </div>
-
-              </div>
-
-              {/* IMAGE */}
-
-              <div className="mt-4 relative">
-
-                <div className="absolute inset-10 bg-blue-100/50 blur-3xl rounded-full" />
-
-                <div className="relative bg-white rounded-[2rem] shadow-sm border border-gray-100 p-5 sm:p-7">
-
-                  <div className="absolute top-4 left-4 z-10 bg-red-500 text-white rounded-full px-3 py-1.5 text-[10px] font-black">
-                    SAVE ৳{discount}
-                  </div>
-
-                  {productImage ? (
-                    <img
-                      src={productImage}
-                      alt={product.name}
-                      className="w-full h-[250px] sm:h-[310px] lg:h-[350px] object-contain"
-                    />
-                  ) : (
-                    <div className="w-full h-[250px] sm:h-[310px] lg:h-[350px] flex items-center justify-center text-gray-300">
-                      No Image
-                    </div>
-                  )}
-
-                </div>
-
-              </div>
-
-              {/* PRODUCT INFO */}
-
-              <div className="mt-5">
-
-                <div className="flex items-center gap-2">
-
-                  <div className="flex gap-0.5 text-yellow-500">
-
+                <div className="mt-6 flex items-center gap-3">
+                  <div className="flex items-center gap-1">
                     {[1, 2, 3, 4, 5].map(
                       (star) => (
                         <FiStar
                           key={star}
-                          size={13}
-                          className="fill-current"
+                          size={14}
+                          className="text-[#c99b5e] fill-current"
                         />
                       )
                     )}
-
                   </div>
 
-                  <span className="text-xs font-bold">
-                    {Number(product.rating) ||
-                      "4.9"}
+                  <span className="text-xs font-black">
+                    {Number(product.rating) || "4.9"}
                   </span>
 
                   <span className="text-xs text-gray-400">
@@ -951,574 +1277,834 @@ const MakeupOne = () => {
                       "500+"}{" "}
                     happy customers
                   </span>
-
                 </div>
 
-                <h1 className="mt-2 text-3xl sm:text-4xl lg:text-[40px] leading-[1.05] font-black tracking-tight">
-                  {product.name}
-                </h1>
+                {/* PRICE */}
 
-                <p className="mt-3 text-sm sm:text-base text-gray-500 leading-relaxed max-w-xl">
-                  {product?.details
-                    ?.shortDescription ||
-                    product.description ||
-                    "Premium quality product designed for comfort, style and everyday use."}
-                </p>
-
-                <div className="mt-4 flex flex-wrap items-center gap-3">
-
-                  <span className="text-3xl sm:text-4xl font-black">
+                <div className="mt-7 flex items-end flex-wrap gap-3">
+                  <span className="text-4xl sm:text-5xl font-black tracking-[-.05em]">
                     ৳{price}
                   </span>
 
                   {oldPrice > price && (
-                    <span className="text-base text-gray-400 line-through">
+                    <span className="mb-1 text-lg text-red-400 line-through">
                       ৳{oldPrice}
                     </span>
                   )}
 
-                  <span className="bg-green-100 text-green-700 px-2.5 py-1 rounded-full text-[10px] font-bold">
-                    SAVE ৳{discount}
-                  </span>
-
+                  {discount > 0 && (
+                    <span className="mb-1 px-3 py-1.5 rounded-full bg-[#e7f2e9] text-[#3e7651] text-[10px] font-black">
+                      SAVE ৳{discount}
+                    </span>
+                  )}
                 </div>
 
-                <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
-
+                <div className="mt-7 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4 gap-x-5 gap-y-3">
                   <Benefit text="Premium Quality" />
                   <Benefit text="Cash on Delivery" />
                   <Benefit text="Fast Delivery" />
                   <Benefit text="Easy Support" />
-
                 </div>
 
-                {productStock !== null && (
-                  <div className="mt-4 text-xs font-semibold">
-                    {productStock > 0 ? (
-                      <span className="text-green-600">
-                        {productStock} items available
-                      </span>
-                    ) : (
-                      <span className="text-red-500">
-                        Out of stock
-                      </span>
-                    )}
-                  </div>
-                )}
+                <div className="hidden lg:flex items-center gap-4 mt-9">
+                  <a
+                    href="#order"
+                    className="group inline-flex items-center justify-center gap-3 h-13 px-6 rounded-2xl bg-[#171717] text-white text-sm font-bold hover:bg-[#292929] transition-all duration-300"
+                  >
+                    Order Now
 
+                    <span className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center group-hover:translate-x-1 transition-transform">
+                      <FiArrowRight size={14} />
+                    </span>
+                  </a>
+
+                  <span className="text-[9px] uppercase tracking-[.15em] font-black text-gray-400">
+                    Cash on Delivery Available
+                  </span>
+                </div>
               </div>
 
-            </section>
+              {/* RIGHT PRODUCT */}
 
-            {/* =================================
-                ORDER FORM
-            ================================= */}
+              <div className="relative reveal-up reveal-delay">
+                <div className="absolute inset-[12%] rounded-full bg-[#d9e6db] blur-[80px] opacity-70 soft-pulse" />
 
-            <section>
+                <div className="relative">
+                  {discount > 0 && (
+                    <div className="absolute -top-4 -right-2 sm:-top-6 sm:-right-5 z-30">
+                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#171717] text-white flex flex-col items-center justify-center rotate-6 shadow-xl">
+                        <span className="text-[8px] uppercase tracking-widest text-white/50">
+                          Save
+                        </span>
 
-              <div className="bg-white rounded-[2rem] border border-gray-100 shadow-xl shadow-gray-200/50 p-5 sm:p-7">
+                        <span className="text-sm sm:text-base font-black">
+                          ৳{discount}
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
-                <div className="mb-5">
+                  <div className="image-card relative overflow-hidden rounded-[2.5rem] sm:rounded-[3rem] bg-white border border-black/[.05] shadow-[0_30px_80px_rgba(35,30,20,.09)]">
+                    <div className="relative aspect-[4/4.25] sm:aspect-[4/4.5] overflow-hidden">
 
-                  <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em]">
-                    Quick Order
-                  </p>
+                      {/* =================================================
+                          BACKEND PRODUCT IMAGES
+                      ================================================= */}
 
-                  <h2 className="mt-1 text-2xl sm:text-3xl font-black">
-                    Place your order
-                  </h2>
+                      {productImages.length > 0 ? (
+                        productImages.map(
+                          (image, index) => (
+                            <img
+                              key={`${image}-${index}`}
+                              src={image}
+                              alt={`${product.name} ${
+                                index + 1
+                              }`}
+                              loading={
+                                index === 0
+                                  ? "eager"
+                                  : "lazy"
+                              }
+                              className={`
+                                image-hover
+                                absolute
+                                inset-0
+                                w-full
+                                h-full
+                                object-cover
+                                transition-all
+                                duration-[1000ms]
+                                ease-out
+                                ${
+                                  activeImage ===
+                                  index
+                                    ? "opacity-100 scale-100"
+                                    : "opacity-0 scale-[1.05]"
+                                }
+                              `}
+                              onError={(e) => {
+                                e.currentTarget.style.display =
+                                  "none";
+                              }}
+                            />
+                          )
+                        )
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center bg-[#f3f1ec]">
+                          <div className="text-center px-6">
+                            <FiShoppingBag
+                              size={35}
+                              className="mx-auto text-gray-300"
+                            />
 
-                  <p className="mt-2 text-xs sm:text-sm text-gray-400">
-                    Fill in your details and we'll contact you for confirmation.
-                  </p>
+                            <p className="mt-3 text-xs font-bold text-gray-400">
+                              Product image unavailable
+                            </p>
+                          </div>
+                        </div>
+                      )}
 
+                      <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+
+                      <div className="absolute left-5 bottom-5 sm:left-7 sm:bottom-7">
+                        <div className="float-product bg-white/90 backdrop-blur-xl rounded-2xl px-4 py-3 shadow-xl border border-white">
+                          <p className="text-[8px] uppercase tracking-[.17em] text-gray-400 font-black">
+                            Designed for
+                          </p>
+
+                          <p className="mt-1 text-xs sm:text-sm font-black">
+                            Clean. Calm. Beautiful.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* IMAGE INDICATORS */}
+
+                      {productImages.length > 1 && (
+                        <div className="absolute right-5 bottom-6 flex flex-col gap-2">
+                          {productImages.map(
+                            (_, index) => (
+                              <button
+                                key={index}
+                                type="button"
+                                onClick={() =>
+                                  setActiveImage(
+                                    index
+                                  )
+                                }
+                                aria-label={`Show image ${
+                                  index + 1
+                                }`}
+                                className={`
+                                  rounded-full
+                                  transition-all
+                                  duration-300
+                                  ${
+                                    activeImage ===
+                                    index
+                                      ? "w-2 h-7 bg-[#171717]"
+                                      : "w-2 h-2 bg-black/25 hover:bg-black/50"
+                                  }
+                                `}
+                              />
+                            )
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="px-5 sm:px-7 py-5 flex items-center justify-between border-t border-black/[.05]">
+                      <div>
+                        <p className="text-[8px] uppercase tracking-[.2em] text-gray-400 font-black">
+                          Spriengge Collection
+                        </p>
+
+                        <p className="mt-1 text-xs sm:text-sm font-black">
+                          Premium Everyday Essential
+                        </p>
+                      </div>
+
+                      <div className="hidden sm:flex items-center gap-2 text-[9px] text-gray-400 font-bold">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
+
+                        {productStock !== null
+                          ? productStock > 0
+                            ? "In Stock"
+                            : "Out of Stock"
+                          : "Available"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ===================================================
+            TRUST STRIP
+        =================================================== */}
+
+        <section className="border-y border-black/[.05] bg-white/60">
+          <div className="max-w-6xl mx-auto px-5 sm:px-8 py-7">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+              <TrustItem
+                icon={<FiShield />}
+                title="Secure Order"
+                text="Your information is protected"
+              />
+
+              <TrustItem
+                icon={<FiTruck />}
+                title="Fast Delivery"
+                text="Reliable delivery service"
+              />
+
+              <TrustItem
+                icon={<FiCheck />}
+                title="Cash on Delivery"
+                text="Pay when you receive"
+              />
+
+              <TrustItem
+                icon={<FiStar />}
+                title="Premium Quality"
+                text="Carefully selected products"
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* ===================================================
+            ORDER SECTION
+        =================================================== */}
+
+        <section
+          id="order"
+          className="relative py-16 sm:py-20 lg:py-28"
+        >
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid lg:grid-cols-[.78fr_1.22fr] gap-8 lg:gap-12 items-start">
+
+              {/* ORDER INFO */}
+
+              <div className="lg:sticky lg:top-10 reveal-up">
+                <p className="text-[9px] uppercase tracking-[.28em] font-black text-gray-400">
+                  Quick & Easy
+                </p>
+
+                <h2 className="mt-3 text-4xl sm:text-5xl font-black tracking-[-.06em] leading-[.92]">
+                  Get yours
+                  <br />
+                  today.
+                </h2>
+
+                <p className="mt-5 text-sm text-gray-500 leading-7 max-w-md">
+                  শুধু আপনার তথ্যগুলো পূরণ করুন।
+                  অর্ডার পাওয়ার পর আমাদের টিম
+                  আপনার সাথে যোগাযোগ করে
+                  অর্ডারটি কনফার্ম করবে।
+                </p>
+
+                <div className="mt-8 flex items-center gap-4">
+                  <div className="w-20 h-20 rounded-2xl overflow-hidden bg-white border border-black/[.05] shadow-sm">
+                    {productImage ? (
+                      <img
+                        src={productImage}
+                        alt={product.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-[#f3f1ec]">
+                        <FiShoppingBag
+                          size={20}
+                          className="text-gray-300"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <p className="text-[9px] uppercase tracking-wider text-gray-400 font-bold">
+                      Your Selection
+                    </p>
+
+                    <h3 className="mt-1 text-sm font-black">
+                      {product.name}
+                    </h3>
+
+                    <p className="mt-1 text-sm font-black">
+                      ৳{price}
+                    </p>
+                  </div>
                 </div>
 
-                <form onSubmit={handleSubmit}>
-
-                  {/* NAME + PHONE */}
-
-                  <div className="grid sm:grid-cols-2 gap-3">
-
-                    <div>
-
-                      <label className="block text-[11px] font-bold text-gray-600 mb-1.5">
-                        Full Name *
-                      </label>
-
-                      <input
-                        type="text"
-                        name="name"
-                        value={formData.name}
-                        onChange={handleChange}
-                        placeholder="Your name"
-                        required
-                        className="w-full h-11 px-4 rounded-xl bg-gray-50 border border-gray-200 text-sm outline-none focus:bg-white focus:border-black transition"
-                      />
-
+                <div className="mt-7 rounded-2xl bg-[#ebe8df] p-4">
+                  <div className="flex gap-3">
+                    <div className="w-9 h-9 shrink-0 rounded-xl bg-white flex items-center justify-center">
+                      <FiTruck size={15} />
                     </div>
 
                     <div>
+                      <p className="text-xs font-black">
+                        Delivery Information
+                      </p>
 
-                      <label className="block text-[11px] font-bold text-gray-600 mb-1.5">
-                        Phone Number *
-                      </label>
+                      <p className="mt-1 text-[10px] text-gray-500 leading-5">
+                        ঢাকা শহরের ভিতরে: ৳60 ·
+                        ঢাকার বাইরে: ৳100
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-                      <input
-                        type="tel"
+              {/* FORM */}
+
+              <div className="reveal-up reveal-delay-2">
+                <div className="bg-white rounded-[2rem] sm:rounded-[2.5rem] border border-black/[.05] shadow-[0_25px_70px_rgba(35,30,20,.07)] p-5 sm:p-7 lg:p-9">
+                  <div className="mb-7">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[9px] uppercase tracking-[.22em] font-black text-gray-400">
+                          Order Form
+                        </p>
+
+                        <h2 className="mt-2 text-2xl sm:text-3xl font-black tracking-[-.04em]">
+                          Place your order
+                        </h2>
+                      </div>
+
+                      <div className="hidden sm:flex w-10 h-10 rounded-full bg-[#f3f2ee] items-center justify-center">
+                        <FiShoppingBag size={16} />
+                      </div>
+                    </div>
+
+                    <p className="mt-2 text-xs sm:text-sm text-gray-400">
+                      আপনার তথ্য দিয়ে অর্ডারটি সম্পন্ন করুন।
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleSubmit}>
+                    {/* NAME + PHONE */}
+
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <PremiumInput
+                        label="Full Name"
+                        name="name"
+                        value={formData.name}
+                        onChange={handleChange}
+                        placeholder="আপনার নাম"
+                        required
+                      />
+
+                      <PremiumInput
+                        label="Phone Number"
                         name="phone"
+                        type="tel"
                         value={formData.phone}
                         onChange={handlePhoneChange}
                         placeholder="01XXXXXXXXX"
                         inputMode="numeric"
                         maxLength={11}
                         required
-                        className="w-full h-11 px-4 rounded-xl bg-gray-50 border border-gray-200 text-sm outline-none focus:bg-white focus:border-black transition"
                       />
-
                     </div>
 
-                  </div>
+                    {/* FULL ADDRESS */}
 
-                  {/* DISTRICT + THANA */}
+                    <div className="mt-3">
+                      <label className="block text-[9px] uppercase tracking-wider font-black text-gray-500 mb-2">
+                        সম্পূর্ণ ঠিকানা
 
-                  <div className="grid sm:grid-cols-2 gap-3 mt-3">
-
-                    <div>
-
-                      <label className="block text-[11px] font-bold text-gray-600 mb-1.5">
-                        District *
+                        <span className="ml-1 text-red-500">
+                          *
+                        </span>
                       </label>
 
-                      <div className="relative">
-
-                        <FiMapPin
-                          size={15}
-                          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                        />
-
-                        <select
-                          name="district"
-                          value={formData.district}
-                          onChange={handleDistrictChange}
-                          required
-                          className="w-full h-11 pl-9 pr-3 rounded-xl bg-gray-50 border border-gray-200 text-sm outline-none focus:bg-white focus:border-black transition appearance-none"
-                        >
-
-                          <option value="">
-                            Select District
-                          </option>
-
-                          {Object.keys(
-                            districtData
-                          ).map((district) => (
-                            <option
-                              key={district}
-                              value={district}
-                            >
-                              {district}
-                            </option>
-                          ))}
-
-                        </select>
-
-                      </div>
-
-                    </div>
-
-                    <div>
-
-                      <label className="block text-[11px] font-bold text-gray-600 mb-1.5">
-                        Thana / Upazila *
-                      </label>
-
-                      <select
-                        name="thana"
-                        value={formData.thana}
+                      <textarea
+                        name="address"
+                        value={formData.address}
                         onChange={handleChange}
+                        placeholder="বাড়ি, রোড, গ্রাম, এলাকা, বাজার..."
                         required
-                        disabled={!formData.district}
-                        className="w-full h-11 px-3 rounded-xl bg-gray-50 border border-gray-200 text-sm outline-none focus:bg-white focus:border-black transition disabled:opacity-50"
-                      >
-
-                        <option value="">
-                          Select Thana
-                        </option>
-
-                        {districtData[
-                          formData.district
-                        ]?.map((thana) => (
-                          <option
-                            key={thana}
-                            value={thana}
-                          >
-                            {thana}
-                          </option>
-                        ))}
-
-                      </select>
-
+                        rows={3}
+                        className="w-full px-4 py-3.5 rounded-xl bg-[#f7f6f3] border border-transparent text-sm outline-none focus:bg-white focus:border-black/10 transition resize-none"
+                      />
                     </div>
 
-                  </div>
+                    {/* NOTE */}
 
-                  {/* ADDRESS */}
+                    <div className="mt-3">
+                      <label className="block text-[9px] uppercase tracking-wider font-black text-gray-500 mb-2">
+                        আপনার মতামত থাকলে লিখুন
 
-                  <div className="mt-3">
+                        <span className="ml-1 normal-case tracking-normal font-normal text-gray-400">
+                          (optional)
+                        </span>
+                      </label>
 
-                    <label className="block text-[11px] font-bold text-gray-600 mb-1.5">
-                      Full Delivery Address *
-                    </label>
+                      <input
+                        type="text"
+                        name="note"
+                        value={formData.note}
+                        onChange={handleChange}
+                        placeholder="কোনো বিশেষ নির্দেশনা?"
+                        className="w-full h-12 px-4 rounded-xl bg-[#f7f6f3] border border-transparent text-sm outline-none focus:bg-white focus:border-black/10 transition"
+                      />
+                    </div>
 
-                    <textarea
-                      name="address"
-                      value={formData.address}
-                      onChange={handleChange}
-                      placeholder="House, road, village, area..."
-                      required
-                      rows={2}
-                      className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-sm outline-none focus:bg-white focus:border-black transition resize-none"
-                    />
+                    {/* PRODUCT + QUANTITY */}
 
-                  </div>
-
-                  {/* NOTE */}
-
-                  <div className="mt-3">
-
-                    <label className="block text-[11px] font-bold text-gray-600 mb-1.5">
-                      Order Note
-                      <span className="text-gray-400 font-normal">
-                        {" "}
-                        (Optional)
-                      </span>
-                    </label>
-
-                    <input
-                      type="text"
-                      name="note"
-                      value={formData.note}
-                      onChange={handleChange}
-                      placeholder="Any special instruction?"
-                      className="w-full h-11 px-4 rounded-xl bg-gray-50 border border-gray-200 text-sm outline-none focus:bg-white focus:border-black transition"
-                    />
-
-                  </div>
-
-                  {/* PRODUCT + QUANTITY */}
-
-                  <div className="mt-4 p-4 bg-gray-50 rounded-2xl">
-
-                    <div className="flex items-center gap-3">
-
-                      {productImage ? (
-                        <img
-                          src={productImage}
-                          alt={product.name}
-                          className="w-14 h-14 rounded-xl bg-white object-contain border border-gray-100"
-                        />
-                      ) : (
-                        <div className="w-14 h-14 rounded-xl bg-white border border-gray-100 flex items-center justify-center text-gray-300 text-xs">
-                          N/A
+                    <div className="mt-5 rounded-2xl bg-[#f7f6f3] p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-16 h-16 rounded-xl overflow-hidden bg-white shrink-0">
+                          {productImage ? (
+                            <img
+                              src={productImage}
+                              alt={product.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <FiShoppingBag
+                                size={18}
+                                className="text-gray-300"
+                              />
+                            </div>
+                          )}
                         </div>
-                      )}
 
-                      <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-sm font-black truncate">
+                            {product.name}
+                          </h3>
 
-                        <h3 className="font-bold text-sm truncate">
-                          {product.name}
-                        </h3>
+                          <p className="mt-1 text-xs text-gray-400">
+                            ৳{price} × {safeQuantity}
+                          </p>
+                        </div>
 
-                        <p className="text-xs text-gray-400 mt-1">
-                          ৳{price} × {safeQuantity}
-                        </p>
+                        <div className="flex items-center bg-white rounded-xl border border-black/[.06] overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={
+                              decreaseQuantity
+                            }
+                            disabled={
+                              safeQuantity <= 1
+                            }
+                            className="w-9 h-9 flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 transition"
+                          >
+                            <FiMinus size={13} />
+                          </button>
 
+                          <span className="w-7 text-center text-sm font-black">
+                            {safeQuantity}
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={
+                              increaseQuantity
+                            }
+                            disabled={
+                              productStock !==
+                                null &&
+                              productStock > 0 &&
+                              safeQuantity >=
+                                productStock
+                            }
+                            className="w-9 h-9 flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 transition"
+                          >
+                            <FiPlus size={13} />
+                          </button>
+                        </div>
                       </div>
+                    </div>
 
-                      {/* QUANTITY */}
+                    {/* DELIVERY AREA */}
 
-                      <div className="flex items-center bg-white border border-gray-200 rounded-xl overflow-hidden">
+                    <div className="mt-5">
+                      <label className="block text-[9px] uppercase tracking-wider font-black text-gray-500 mb-2">
+                        ডেলিভারি এলাকা
 
-                        <button
-                          type="button"
-                          onClick={decreaseQuantity}
-                          disabled={safeQuantity <= 1}
-                          className="w-9 h-9 flex items-center justify-center hover:bg-gray-100 disabled:opacity-40"
-                        >
-                          <FiMinus size={13} />
-                        </button>
-
-                        <span className="w-8 text-center text-sm font-black">
-                          {safeQuantity}
+                        <span className="ml-1 text-red-500">
+                          *
                         </span>
+                      </label>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+                        {/* DHAKA */}
 
                         <button
                           type="button"
-                          onClick={increaseQuantity}
-                          disabled={
-                            productStock !== null &&
-                            productStock > 0 &&
-                            safeQuantity >=
-                              productStock
+                          onClick={() =>
+                            handleDeliveryAreaChange(
+                              "inside-dhaka"
+                            )
                           }
-                          className="w-9 h-9 flex items-center justify-center hover:bg-gray-100 disabled:opacity-40"
+                          className={`
+                            text-left
+                            rounded-2xl
+                            p-4
+                            border
+                            transition-all
+                            duration-300
+                            ${
+                              formData.deliveryArea ===
+                              "inside-dhaka"
+                                ? "border-black bg-[#f5f4ef] shadow-sm"
+                                : "border-black/[.06] bg-white hover:border-black/20"
+                            }
+                          `}
                         >
-                          <FiPlus size={13} />
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-[8px] uppercase tracking-wider text-gray-400 font-black">
+                                Delivery Area
+                              </p>
+
+                              <p className="mt-1 text-sm font-black">
+                                ঢাকা শহরের ভিতরে
+                              </p>
+                            </div>
+
+                            <span
+                              className={`
+                                w-5 h-5
+                                rounded-full
+                                border
+                                flex
+                                items-center
+                                justify-center
+                                shrink-0
+                                ${
+                                  formData.deliveryArea ===
+                                  "inside-dhaka"
+                                    ? "bg-[#171717] border-[#171717] text-white"
+                                    : "border-black/15"
+                                }
+                              `}
+                            >
+                              {formData.deliveryArea ===
+                                "inside-dhaka" && (
+                                <FiCheck size={11} />
+                              )}
+                            </span>
+                          </div>
+
+                          <p className="mt-3 text-xl font-black">
+                            ৳60
+                          </p>
                         </button>
 
-                      </div>
+                        {/* OUTSIDE DHAKA */}
 
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleDeliveryAreaChange(
+                              "outside-dhaka"
+                            )
+                          }
+                          className={`
+                            text-left
+                            rounded-2xl
+                            p-4
+                            border
+                            transition-all
+                            duration-300
+                            ${
+                              formData.deliveryArea ===
+                              "outside-dhaka"
+                                ? "border-black bg-[#f5f4ef] shadow-sm"
+                                : "border-black/[.06] bg-white hover:border-black/20"
+                            }
+                          `}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-[8px] uppercase tracking-wider text-gray-400 font-black">
+                                Delivery Area
+                              </p>
+
+                              <p className="mt-1 text-sm font-black">
+                                ঢাকা শহরের বাইরে
+                              </p>
+                            </div>
+
+                            <span
+                              className={`
+                                w-5 h-5
+                                rounded-full
+                                border
+                                flex
+                                items-center
+                                justify-center
+                                shrink-0
+                                ${
+                                  formData.deliveryArea ===
+                                  "outside-dhaka"
+                                    ? "bg-[#171717] border-[#171717] text-white"
+                                    : "border-black/15"
+                                }
+                              `}
+                            >
+                              {formData.deliveryArea ===
+                                "outside-dhaka" && (
+                                <FiCheck size={11} />
+                              )}
+                            </span>
+                          </div>
+
+                          <p className="mt-3 text-xl font-black">
+                            ৳100
+                          </p>
+                        </button>
+                      </div>
                     </div>
 
-                  </div>
+                    {/* SUMMARY */}
 
-                  {/* DELIVERY */}
-
-                  <div className="mt-3 p-4 border border-gray-100 rounded-2xl">
-
-                    <div className="flex justify-between items-center">
-
-                      <div className="flex items-center gap-2">
-
-                        <FiTruck className="text-blue-600" />
-
-                        <span className="text-sm font-bold">
-                          Delivery Charge
+                    <div className="mt-5 border-t border-black/[.06] pt-5 space-y-3">
+                      <div className="flex justify-between text-xs text-gray-500">
+                        <span>
+                          Product ({safeQuantity} × ৳
+                          {price})
                         </span>
 
+                        <span className="font-semibold text-gray-800">
+                          ৳{subtotal}
+                        </span>
                       </div>
 
-                      <span className="text-sm font-black">
+                      <div className="flex justify-between text-xs text-gray-500">
+                        <span>
+                          Delivery
+                        </span>
 
-                        {deliveryCharge
-                          ? `৳${deliveryCharge}`
-                          : "Select district"}
-
-                      </span>
-
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 mt-3">
-
-                      <div
-                        className={`rounded-xl border p-2 text-center ${
-                          isDhaka
-                            ? "border-black bg-gray-50"
-                            : "border-gray-100"
-                        }`}
-                      >
-
-                        <p className="text-[10px] text-gray-400">
-                          Inside Dhaka
-                        </p>
-
-                        <p className="text-sm font-black">
-                          ৳60
-                        </p>
-
+                        <span className="font-semibold text-gray-800">
+                          {deliveryCharge
+                            ? `৳${deliveryCharge}`
+                            : "এলাকা নির্বাচন করুন"}
+                        </span>
                       </div>
 
-                      <div
-                        className={`rounded-xl border p-2 text-center ${
-                          formData.district &&
-                          !isDhaka
-                            ? "border-black bg-gray-50"
-                            : "border-gray-100"
-                        }`}
-                      >
+                      <div className="flex items-end justify-between pt-3 border-t border-black/[.06]">
+                        <div>
+                          <p className="text-[9px] uppercase tracking-wider text-gray-400 font-black">
+                            Total Amount
+                          </p>
 
-                        <p className="text-[10px] text-gray-400">
-                          Outside Dhaka
-                        </p>
+                          <p className="mt-1 text-3xl font-black tracking-[-.05em]">
+                            ৳{total}
+                          </p>
+                        </div>
 
-                        <p className="text-sm font-black">
-                          ৳100
-                        </p>
-
+                        <span className="mb-1 text-[8px] uppercase tracking-wider font-black text-gray-400">
+                          Cash on Delivery
+                        </span>
                       </div>
-
                     </div>
 
-                  </div>
+                    {/* SUBMIT */}
 
-                  {/* ORDER SUMMARY */}
+                    <button
+                      type="submit"
+                      disabled={
+                        submitting ||
+                        (productStock !== null &&
+                          productStock <= 0)
+                      }
+                      className="
+                        group
+                        mt-5
+                        w-full
+                        h-14
+                        rounded-2xl
+                        bg-[#171717]
+                        hover:bg-[#292929]
+                        disabled:bg-gray-300
+                        text-white
+                        font-black
+                        text-sm
+                        flex
+                        items-center
+                        justify-center
+                        gap-3
+                        transition-all
+                        duration-300
+                        active:scale-[.99]
+                      "
+                    >
+                      {submitting ? (
+                        <>
+                          <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
 
-                  <div className="mt-3 p-4 bg-gray-50 rounded-2xl space-y-2">
+                          Processing...
+                        </>
+                      ) : productStock !== null &&
+                        productStock <= 0 ? (
+                        "Out of Stock"
+                      ) : (
+                        <>
+                          Confirm Order — ৳
+                          {total}
 
-                    <div className="flex justify-between text-xs text-gray-500">
+                          <span className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center group-hover:translate-x-1 transition-transform">
+                            <FiArrowRight
+                              size={14}
+                            />
+                          </span>
+                        </>
+                      )}
+                    </button>
 
-                      <span>
-                        Product ({safeQuantity} × ৳
-                        {price})
+                    {/* TRUST */}
+
+                    <div className="mt-5 flex flex-wrap justify-center gap-x-5 gap-y-2 text-[8px] uppercase tracking-wider text-gray-400 font-black">
+                      <span className="flex items-center gap-1.5">
+                        <FiShield size={11} />
+                        Secure
                       </span>
 
-                      <span>
-                        ৳{subtotal}
+                      <span className="flex items-center gap-1.5">
+                        <FiTruck size={11} />
+                        Fast Delivery
                       </span>
 
+                      <span className="flex items-center gap-1.5">
+                        <FiCheck size={11} />
+                        COD
+                      </span>
                     </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
-                    <div className="flex justify-between text-xs text-gray-500">
+        {/* ===================================================
+            FOOTER
+        =================================================== */}
 
-                      <span>
-                        Delivery
-                      </span>
+        <footer className="border-t border-black/[.06] bg-[#eeece6]">
+          <div className="max-w-7xl mx-auto px-5 sm:px-8 py-8">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-center sm:text-left">
+                <p className="text-sm font-black">
+                  Spriengge
+                </p>
 
-                      <span>
-                        {deliveryCharge
-                          ? `৳${deliveryCharge}`
-                          : "—"}
-                      </span>
-
-                    </div>
-
-                    <div className="pt-2 border-t border-gray-200 flex justify-between items-center">
-
-                      <span className="font-bold">
-                        Total
-                      </span>
-
-                      <span className="text-2xl font-black">
-                        ৳{total}
-                      </span>
-
-                    </div>
-
-                  </div>
-
-                  {/* SUBMIT */}
-
-                  <button
-                    type="submit"
-                    disabled={
-                      submitting ||
-                      (productStock !== null &&
-                        productStock <= 0)
-                    }
-                    className="mt-4 w-full py-3.5 rounded-2xl bg-black hover:bg-blue-600 disabled:bg-gray-400 text-white font-bold flex items-center justify-center gap-2 transition-all duration-300"
-                  >
-
-                    {submitting ? (
-                      <>
-                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-
-                        Processing...
-                      </>
-                    ) : productStock !== null &&
-                      productStock <= 0 ? (
-                      <>
-                        Out of Stock
-                      </>
-                    ) : (
-                      <>
-                        Confirm Order — ৳{total}
-
-                        <FiArrowRight />
-                      </>
-                    )}
-
-                  </button>
-
-                  {/* TRUST */}
-
-                  <div className="mt-3 flex items-center justify-center gap-4 text-[10px] text-gray-400">
-
-                    <span className="flex items-center gap-1">
-                      <FiShield />
-                      Secure
-                    </span>
-
-                    <span className="flex items-center gap-1">
-                      <FiTruck />
-                      Fast Delivery
-                    </span>
-
-                    <span className="flex items-center gap-1">
-                      <FiCheck />
-                      Cash on Delivery
-                    </span>
-
-                  </div>
-
-                </form>
-
+                <p className="mt-1 text-[9px] text-gray-400">
+                  Premium essentials for everyday life.
+                </p>
               </div>
 
-            </section>
-
+              <p className="text-[8px] uppercase tracking-[.18em] text-gray-400 font-black">
+                © {new Date().getFullYear()} Spriengge
+              </p>
+            </div>
           </div>
-
-        </div>
-
+        </footer>
       </main>
 
-      {/* =====================================
+      {/* =====================================================
           SUCCESS MODAL
-      ====================================== */}
+      ===================================================== */}
 
       {success && (
-        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
-
-          <div className="relative bg-white rounded-[2rem] p-7 sm:p-8 max-w-sm w-full text-center shadow-2xl">
-
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex items-center justify-center px-4">
+          <div className="relative w-full max-w-sm rounded-[2rem] bg-white p-7 sm:p-8 text-center shadow-2xl">
             <button
               type="button"
               onClick={() => {
                 setSuccess(false);
                 setSuccessOrder(null);
               }}
-              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200"
+              className="absolute top-4 right-4 w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition"
             >
               <FiX size={15} />
             </button>
 
-            <div className="w-16 h-16 mx-auto rounded-full bg-green-100 text-green-600 flex items-center justify-center">
+            <div className="w-16 h-16 mx-auto rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
               <FiCheck size={28} />
             </div>
 
             <h2 className="mt-5 text-2xl font-black">
-              Order Confirmed!
+              অর্ডার সফল হয়েছে!
             </h2>
 
-            <p className="mt-3 text-sm text-gray-500 leading-relaxed">
-              আপনার অর্ডারটি সফলভাবে গ্রহণ করা হয়েছে।
+            <p className="mt-3 text-sm text-gray-500 leading-6">
+              আপনার অর্ডারটি সফলভাবে গ্রহণ করা হয়েছে।
               আমাদের টিম খুব শীঘ্রই আপনার সাথে যোগাযোগ করবে।
             </p>
 
             {successOrder?.orderId && (
-              <div className="mt-4 px-4 py-2 rounded-xl bg-green-50">
-                <p className="text-[10px] text-gray-400">
+              <div className="mt-4 px-4 py-3 rounded-xl bg-emerald-50">
+                <p className="text-[9px] uppercase tracking-wider text-gray-400">
                   Order ID
                 </p>
 
-                <p className="text-xs font-bold break-all">
+                <p className="mt-1 text-xs font-bold break-all">
                   {successOrder.orderId}
                 </p>
               </div>
             )}
 
-            <div className="mt-5 p-4 rounded-2xl bg-gray-50">
-
-              <p className="text-xs text-gray-400">
-                Quantity
-              </p>
-
-              <p className="text-xl font-black">
-                {successOrder?.quantity ||
-                  safeQuantity}{" "}
-                × {product.name}
-              </p>
-
-              <p className="text-xs text-gray-400 mt-2">
+            <div className="mt-4 p-4 rounded-2xl bg-gray-50">
+              <p className="text-[10px] text-gray-400">
                 Total Amount
               </p>
 
-              <p className="text-2xl font-black">
+              <p className="mt-1 text-3xl font-black">
                 ৳
                 {successOrder?.total ||
                   total}
               </p>
-
             </div>
 
             <button
@@ -1527,34 +2113,114 @@ const MakeupOne = () => {
                 setSuccess(false);
                 setSuccessOrder(null);
               }}
-              className="mt-5 w-full h-12 rounded-xl bg-black text-white font-bold hover:bg-blue-600 transition"
+              className="mt-5 w-full h-12 rounded-xl bg-[#171717] text-white font-bold hover:bg-[#292929] transition"
             >
               Done
             </button>
-
           </div>
-
         </div>
       )}
-
     </div>
   );
 };
 
-// ======================================================
-// BENEFIT
-// ======================================================
+/* =========================================================
+   BENEFIT
+========================================================= */
 
 const Benefit = ({ text }) => {
   return (
-    <div className="flex items-center gap-1.5 text-[11px] sm:text-xs font-semibold text-gray-600">
-
-      <span className="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center shrink-0">
-        <FiCheck size={11} />
+    <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-semibold text-gray-600">
+      <span className="w-5 h-5 rounded-full bg-[#e7f2e9] text-[#3e7651] flex items-center justify-center shrink-0">
+        <FiCheck size={10} />
       </span>
 
       {text}
+    </div>
+  );
+};
 
+/* =========================================================
+   TRUST ITEM
+========================================================= */
+
+const TrustItem = ({
+  icon,
+  title,
+  text,
+}) => {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="w-10 h-10 shrink-0 rounded-xl bg-white border border-black/[.05] flex items-center justify-center text-gray-700">
+        {icon}
+      </div>
+
+      <div className="min-w-0">
+        <p className="text-xs font-black truncate">
+          {title}
+        </p>
+
+        <p className="mt-1 text-[9px] sm:text-[10px] text-gray-400 truncate">
+          {text}
+        </p>
+      </div>
+    </div>
+  );
+};
+
+/* =========================================================
+   PREMIUM INPUT
+========================================================= */
+
+const PremiumInput = ({
+  label,
+  name,
+  type = "text",
+  value,
+  onChange,
+  placeholder,
+  required,
+  inputMode,
+  maxLength,
+}) => {
+  return (
+    <div>
+      <label className="block text-[9px] uppercase tracking-wider font-black text-gray-500 mb-2">
+        {label}
+
+        {required && (
+          <span className="ml-1 text-red-500">
+            *
+          </span>
+        )}
+      </label>
+
+      <input
+        type={type}
+        name={name}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        required={required}
+        inputMode={inputMode}
+        maxLength={maxLength}
+        className="
+          w-full
+          h-12
+          px-4
+          rounded-xl
+          bg-[#f7f6f3]
+          border
+          border-transparent
+          text-sm
+          outline-none
+          placeholder:text-gray-300
+          focus:bg-white
+          focus:border-black/10
+          transition-all
+          duration-300
+        "
+      />
     </div>
   );
 };

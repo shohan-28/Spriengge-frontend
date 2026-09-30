@@ -15,9 +15,9 @@ import {
   FiX,
   FiAlertCircle,
   FiArrowRight,
+  FiTruck,
 } from "react-icons/fi";
 import { clearCart } from "../Feature/CartSlice";
-import districtData from "../DistrictData/DistrictData";
 
 /* =========================================================
    API URL
@@ -32,6 +32,16 @@ const BASE_API_URL = API_URL
   .replace(/\/+$/, "")
   .replace(/\/products$/, "")
   .replace(/\/orders$/, "");
+
+/* =========================================================
+   SUPPORT
+========================================================= */
+
+const SUPPORT = {
+  facebook: "https://www.facebook.com/spriengge.shop",
+  mobile: "01341783631",
+  whatsapp: "01341783631",
+};
 
 /* =========================================================
    HELPERS
@@ -56,7 +66,10 @@ const normalizeProductId = (value) => {
 
   const numberValue = Number(value);
 
-  if (!Number.isFinite(numberValue) || numberValue < 1) {
+  if (
+    !Number.isFinite(numberValue) ||
+    numberValue < 1
+  ) {
     return null;
   }
 
@@ -78,7 +91,10 @@ const normalizeVariantId = (value) => {
 const normalizeQuantity = (value) => {
   const quantity = Number(value);
 
-  if (!Number.isFinite(quantity) || quantity < 1) {
+  if (
+    !Number.isFinite(quantity) ||
+    quantity < 1
+  ) {
     return 1;
   }
 
@@ -111,7 +127,7 @@ const findItemVariant = (item) => {
   ).toLowerCase();
 
   /* -------------------------------------------------------
-     1. CANONICAL VARIANT ID
+     1. VARIANT ID
   ------------------------------------------------------- */
 
   if (variantId) {
@@ -233,14 +249,13 @@ const normalizeItem = (
       selectedColorCode ||
       cleanString(foundVariant?.colorCode);
 
-    const availableSizes = Array.isArray(
-      foundVariant?.sizes
-    )
-      ? foundVariant.sizes.filter(
-          (size) =>
-            Number(size?.stock || 0) > 0
-        )
-      : [];
+    const availableSizes =
+      Array.isArray(foundVariant?.sizes)
+        ? foundVariant.sizes.filter(
+            (size) =>
+              Number(size?.stock || 0) > 0
+          )
+        : [];
 
     if (
       !selectedSize &&
@@ -284,7 +299,9 @@ const normalizeItem = (
   const productImage =
     item?.productImage ||
     foundVariant?.images?.[0] ||
+    foundVariant?.image ||
     nestedVariant?.images?.[0] ||
+    nestedVariant?.image ||
     item?.image ||
     item?.images?.[0] ||
     "";
@@ -355,10 +372,9 @@ const Checkout = () => {
     useState({
       name: "",
       phone: "",
-      district: "",
-      thana: "",
       address: "",
       note: "",
+      deliveryArea: "",
     });
 
   /* =======================================================
@@ -369,7 +385,7 @@ const Checkout = () => {
     useState(false);
 
   /* =======================================================
-     POPUP STATE
+     POPUP
   ======================================================= */
 
   const [popup, setPopup] = useState({
@@ -380,6 +396,7 @@ const Checkout = () => {
     orderId: "",
     total: 0,
     quantity: 0,
+    support: null,
   });
 
   /* =======================================================
@@ -529,81 +546,6 @@ const Checkout = () => {
   };
 
   /* =======================================================
-     DISTRICT LIST
-  ======================================================= */
-
-  const districtList = useMemo(() => {
-    if (Array.isArray(districtData)) {
-      return districtData;
-    }
-
-    if (
-      Array.isArray(
-        districtData?.districts
-      )
-    ) {
-      return districtData.districts;
-    }
-
-    if (
-      Array.isArray(
-        districtData?.default
-      )
-    ) {
-      return districtData.default;
-    }
-
-    if (
-      districtData &&
-      typeof districtData === "object"
-    ) {
-      return Object.entries(
-        districtData
-      ).map(
-        ([name, thanas]) => ({
-          district: name,
-          thanas:
-            Array.isArray(thanas)
-              ? thanas
-              : [],
-        })
-      );
-    }
-
-    return [];
-  }, []);
-
-  /* =======================================================
-     SELECTED DISTRICT
-  ======================================================= */
-
-  const selectedDistrict =
-    districtList.find((item) => {
-      const districtName =
-        item?.district ??
-        item?.name ??
-        "";
-
-      return (
-        cleanString(
-          districtName
-        ).toLowerCase() ===
-        cleanString(
-          formData.district
-        ).toLowerCase()
-      );
-    });
-
-  /* =======================================================
-     THANA LIST
-  ======================================================= */
-
-  const thanaList =
-    selectedDistrict?.thanas ||
-    selectedDistrict?.thana ||
-    [];
-
-  /* =======================================================
      SUBTOTAL
   ======================================================= */
 
@@ -618,23 +560,29 @@ const Checkout = () => {
   }, [orderItems]);
 
   /* =======================================================
-     DELIVERY
+     DELIVERY CHARGE
+
+     inside-dhaka  = 60
+     outside-dhaka = 100
   ======================================================= */
 
   const deliveryCharge = useMemo(() => {
-    if (!formData.district) {
-      return 0;
+    if (
+      formData.deliveryArea ===
+      "inside-dhaka"
+    ) {
+      return 60;
     }
 
-    const district =
-      cleanString(
-        formData.district
-      ).toLowerCase();
+    if (
+      formData.deliveryArea ===
+      "outside-dhaka"
+    ) {
+      return 100;
+    }
 
-    return district === "dhaka"
-      ? 60
-      : 100;
-  }, [formData.district]);
+    return 0;
+  }, [formData.deliveryArea]);
 
   /* =======================================================
      TOTAL
@@ -653,15 +601,7 @@ const Checkout = () => {
       value,
     } = event.target;
 
-    if (name === "district") {
-      setFormData((previous) => ({
-        ...previous,
-        district: value,
-        thana: "",
-      }));
-
-      return;
-    }
+    /* PHONE */
 
     if (name === "phone") {
       const phone = value
@@ -683,12 +623,29 @@ const Checkout = () => {
   };
 
   /* =======================================================
+     DELIVERY AREA
+  ======================================================= */
+
+  const handleDeliveryAreaChange = (
+    area
+  ) => {
+    if (loading) {
+      return;
+    }
+
+    setFormData((previous) => ({
+      ...previous,
+      deliveryArea: area,
+    }));
+  };
+
+  /* =======================================================
      VALIDATE ITEMS
   ======================================================= */
 
   const validateItems = () => {
     if (!orderItems.length) {
-      return "Your cart is empty.";
+      return "আপনার কার্ট খালি।";
     }
 
     for (const item of orderItems) {
@@ -698,13 +655,14 @@ const Checkout = () => {
         ) ||
         Number(item.productId) < 1
       ) {
-        return `Product ID is missing for "${
-          item?.productName || "product"
-        }".`;
+        return `"${
+          item?.productName ||
+          "Product"
+        }"-এর Product ID পাওয়া যায়নি।`;
       }
 
       if (!item?.productName) {
-        return "Product name is missing.";
+        return "Product name পাওয়া যায়নি।";
       }
 
       if (
@@ -713,7 +671,9 @@ const Checkout = () => {
         ) ||
         Number(item.quantity) < 1
       ) {
-        return `Invalid quantity for "${item.productName}".`;
+        return `"${
+          item.productName
+        }"-এর quantity সঠিক নয়।`;
       }
 
       if (
@@ -722,14 +682,19 @@ const Checkout = () => {
         ) ||
         Number(item.price) < 0
       ) {
-        return `Invalid price for "${item.productName}".`;
+        return `"${
+          item.productName
+        }"-এর price সঠিক নয়।`;
       }
 
       if (
         item?.variantId &&
-        typeof item.variantId !== "string"
+        typeof item.variantId !==
+          "string"
       ) {
-        return `Invalid variant for "${item.productName}".`;
+        return `"${
+          item.productName
+        }"-এর variant সঠিক নয়।`;
       }
     }
 
@@ -749,63 +714,100 @@ const Checkout = () => {
       orderId: "",
       total: 0,
       quantity: 0,
+      support: null,
     });
   };
 
   /* =======================================================
-     SUCCESS -> HOME
+     CONTINUE SHOPPING
   ======================================================= */
 
-  const handleContinueShopping = () => {
-    closePopup();
-    navigate("/");
+  const handleContinueShopping =
+    () => {
+      closePopup();
+      navigate("/");
+    };
+
+  /* =======================================================
+     COPY SUPPORT NUMBER
+  ======================================================= */
+
+  const copySupportNumber = async (
+    number
+  ) => {
+    try {
+      await navigator.clipboard.writeText(
+        number
+      );
+    } catch (error) {
+      console.error(
+        "Copy failed:",
+        error
+      );
+    }
   };
 
   /* =======================================================
      PLACE ORDER
   ======================================================= */
 
-  const handleSubmit = async (event) => {
+  const handleSubmit = async (
+    event
+  ) => {
     event.preventDefault();
 
     if (loading) {
       return;
     }
 
-    /* FORM VALIDATION */
+    /* -----------------------------------------------------
+       FORM VALUES
+    ----------------------------------------------------- */
 
-    const name =
-      cleanString(formData.name);
+    const name = cleanString(
+      formData.name
+    );
 
-    const phone =
-      cleanString(formData.phone);
+    const phone = cleanString(
+      formData.phone
+    );
 
-    const district =
-      cleanString(formData.district);
+    const address = cleanString(
+      formData.address
+    );
 
-    const thana =
-      cleanString(formData.thana);
+    const note = cleanString(
+      formData.note
+    );
 
-    const address =
-      cleanString(formData.address);
+    const deliveryArea =
+      cleanString(
+        formData.deliveryArea
+      );
 
-    const note =
-      cleanString(formData.note);
+    /* -----------------------------------------------------
+       NAME
+    ----------------------------------------------------- */
 
     if (!name || name.length < 2) {
       setPopup({
         open: true,
         type: "error",
-        title: "Check your details",
+        title: "নাম প্রয়োজন",
         message:
-          "Please enter your full name.",
+          "দয়া করে আপনার নাম লিখুন।",
         orderId: "",
         total: 0,
         quantity: 0,
+        support: null,
       });
 
       return;
     }
+
+    /* -----------------------------------------------------
+       PHONE
+    ----------------------------------------------------- */
 
     if (
       !phone ||
@@ -814,46 +816,21 @@ const Checkout = () => {
       setPopup({
         open: true,
         type: "error",
-        title: "Invalid phone number",
+        title: "ফোন নম্বর সঠিক নয়",
         message:
-          "Please enter a valid 11-digit Bangladesh phone number.",
+          "দয়া করে সঠিক ১১ সংখ্যার বাংলাদেশি মোবাইল নম্বর দিন।",
         orderId: "",
         total: 0,
         quantity: 0,
+        support: null,
       });
 
       return;
     }
 
-    if (!district) {
-      setPopup({
-        open: true,
-        type: "error",
-        title: "District required",
-        message:
-          "Please select your delivery district.",
-        orderId: "",
-        total: 0,
-        quantity: 0,
-      });
-
-      return;
-    }
-
-    if (!thana) {
-      setPopup({
-        open: true,
-        type: "error",
-        title: "Thana required",
-        message:
-          "Please select your delivery thana.",
-        orderId: "",
-        total: 0,
-        quantity: 0,
-      });
-
-      return;
-    }
+    /* -----------------------------------------------------
+       ADDRESS
+    ----------------------------------------------------- */
 
     if (
       !address ||
@@ -862,18 +839,46 @@ const Checkout = () => {
       setPopup({
         open: true,
         type: "error",
-        title: "Address required",
+        title: "ঠিকানা প্রয়োজন",
         message:
-          "Please enter your complete delivery address.",
+          "দয়া করে আপনার সম্পূর্ণ ঠিকানা লিখুন।",
         orderId: "",
         total: 0,
         quantity: 0,
+        support: null,
       });
 
       return;
     }
 
-    /* ITEM VALIDATION */
+    /* -----------------------------------------------------
+       DELIVERY AREA
+    ----------------------------------------------------- */
+
+    if (
+      deliveryArea !==
+        "inside-dhaka" &&
+      deliveryArea !==
+        "outside-dhaka"
+    ) {
+      setPopup({
+        open: true,
+        type: "error",
+        title: "ডেলিভারি এলাকা নির্বাচন করুন",
+        message:
+          "দয়া করে ঢাকা শহরের ভিতরে অথবা ঢাকা শহরের বাইরে—যে এলাকায় ডেলিভারি হবে সেটি নির্বাচন করুন।",
+        orderId: "",
+        total: 0,
+        quantity: 0,
+        support: null,
+      });
+
+      return;
+    }
+
+    /* -----------------------------------------------------
+       ITEM VALIDATION
+    ----------------------------------------------------- */
 
     const itemError =
       validateItems();
@@ -882,17 +887,23 @@ const Checkout = () => {
       setPopup({
         open: true,
         type: "error",
-        title: "Order cannot be placed",
+        title: "অর্ডার করা যাচ্ছে না",
         message: itemError,
         orderId: "",
         total: 0,
         quantity: 0,
+        support: null,
       });
 
       return;
     }
 
-    /* FINAL ITEMS */
+    /* -----------------------------------------------------
+       FINAL ITEMS
+
+       Backend-এর জন্য শুধু প্রয়োজনীয়
+       product/variant information পাঠানো হচ্ছে।
+    ----------------------------------------------------- */
 
     const finalItems =
       orderItems.map((item) => ({
@@ -918,15 +929,41 @@ const Checkout = () => {
     const firstItem =
       finalItems[0];
 
-    /* ORDER PAYLOAD */
+    /* -----------------------------------------------------
+       FINAL DELIVERY CHARGE
+
+       Backend-এর একই rule:
+       inside-dhaka  = 60
+       outside-dhaka = 100
+    ----------------------------------------------------- */
+
+    const finalDeliveryCharge =
+      deliveryArea ===
+      "inside-dhaka"
+        ? 60
+        : 100;
+
+    const finalTotal =
+      Number(subtotal) +
+      finalDeliveryCharge;
+
+    /* -----------------------------------------------------
+       ORDER PAYLOAD
+       
+       IMPORTANT:
+       district / thana এখানে নেই।
+    ----------------------------------------------------- */
 
     const orderData = {
       name,
+
       phone,
-      district,
-      thana,
+
       address,
+
       note,
+
+      deliveryArea,
 
       orderType: isBuyNow
         ? "buy_now"
@@ -956,10 +993,10 @@ const Checkout = () => {
         Number(subtotal),
 
       deliveryCharge:
-        Number(deliveryCharge),
+        finalDeliveryCharge,
 
       total:
-        Number(total),
+        finalTotal,
 
       paymentMethod:
         "cash_on_delivery",
@@ -973,6 +1010,10 @@ const Checkout = () => {
       orderSource:
         "website",
     };
+
+    /* -----------------------------------------------------
+       DEBUG
+    ----------------------------------------------------- */
 
     console.log(
       "========== ORDER PAYLOAD =========="
@@ -990,9 +1031,17 @@ const Checkout = () => {
       "==================================="
     );
 
+    /* -----------------------------------------------------
+       LOADING
+    ----------------------------------------------------- */
+
     setLoading(true);
 
     try {
+      /* ---------------------------------------------------
+         API REQUEST
+      --------------------------------------------------- */
+
       const response =
         await fetch(
           `${BASE_API_URL}/orders`,
@@ -1014,6 +1063,10 @@ const Checkout = () => {
           }
         );
 
+      /* ---------------------------------------------------
+         RESPONSE
+      --------------------------------------------------- */
+
       let data = null;
 
       try {
@@ -1023,7 +1076,9 @@ const Checkout = () => {
         data = null;
       }
 
-      /* API ERROR */
+      /* ---------------------------------------------------
+         API ERROR
+      --------------------------------------------------- */
 
       if (!response.ok) {
         throw new Error(
@@ -1038,9 +1093,9 @@ const Checkout = () => {
         data
       );
 
-      /* =================================================
-         SAVE SUCCESS SNAPSHOT
-      ================================================= */
+      /* ---------------------------------------------------
+         ORDER ID
+      --------------------------------------------------- */
 
       const orderId =
         data?.order?._id ||
@@ -1049,6 +1104,10 @@ const Checkout = () => {
         data?.data?._id ||
         data?._id ||
         "";
+
+      /* ---------------------------------------------------
+         ORDERED QUANTITY
+      --------------------------------------------------- */
 
       const orderedQuantity =
         orderItems.reduce(
@@ -1060,26 +1119,39 @@ const Checkout = () => {
           0
         );
 
-      const orderedTotal =
-        Number(total);
+      /* ---------------------------------------------------
+         ORDER TOTAL
+      --------------------------------------------------- */
 
-      /* CLEAR CART */
+      const orderedTotal =
+        Number(finalTotal);
+
+      /* ---------------------------------------------------
+         CLEAR CART
+
+         Buy Now হলে cart clear হবে না।
+      --------------------------------------------------- */
 
       if (!isBuyNow) {
         dispatch(clearCart());
       }
 
-      /* SUCCESS POPUP */
+      /* ---------------------------------------------------
+         SUCCESS POPUP
+      --------------------------------------------------- */
 
       setPopup({
         open: true,
         type: "success",
-        title: "Order Confirmed",
+        title: "অর্ডার সফল হয়েছে!",
         message:
-          "Thank you! Your order has been placed successfully.",
+          "ধন্যবাদ! আপনার অর্ডারটি সফলভাবে গ্রহণ করা হয়েছে। আমাদের টিম খুব শীঘ্রই আপনার সাথে যোগাযোগ করবে।",
         orderId,
-        total: orderedTotal,
-        quantity: orderedQuantity,
+        total:
+          orderedTotal,
+        quantity:
+          orderedQuantity,
+        support: null,
       });
     } catch (error) {
       console.error(
@@ -1087,26 +1159,22 @@ const Checkout = () => {
         error
       );
 
-      /* ERROR POPUP */
+      /* ---------------------------------------------------
+         ERROR POPUP
+      --------------------------------------------------- */
 
       setPopup({
-  open: true,
-  type: "error",
-  title: "Order Failed",
-  message:
-    error?.message ||
-    "Something went wrong while placing your order.",
-
-  orderId: "",
-  total: 0,
-  quantity: 0,
-
-  support: {
-    facebook: "https://www.facebook.com/spriengge.shop",
-    mobile: "01341783631",
-    whatsapp: "01341783631",
-  },
-});
+        open: true,
+        type: "error",
+        title: "অর্ডার করা যায়নি",
+        message:
+          error?.message ||
+          "অর্ডার করার সময় একটি সমস্যা হয়েছে।",
+        orderId: "",
+        total: 0,
+        quantity: 0,
+        support: SUPPORT,
+      });
     } finally {
       setLoading(false);
     }
@@ -1116,7 +1184,10 @@ const Checkout = () => {
      EMPTY CART
   ======================================================= */
 
-  if (!orderItems.length && !popup.open) {
+  if (
+    !orderItems.length &&
+    !popup.open
+  ) {
     return (
       <div className="min-h-screen bg-[#f7f7f5] flex items-center justify-center px-4">
         <div className="bg-white border border-gray-200 rounded-3xl p-10 text-center shadow-sm">
@@ -1156,7 +1227,6 @@ const Checkout = () => {
 
   return (
     <div className="min-h-screen bg-[#f7f7f5] text-gray-900">
-
       {/* ===================================================
           HEADER
       =================================================== */}
@@ -1164,7 +1234,6 @@ const Checkout = () => {
       <div className="border-b border-gray-200 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="h-20 flex items-center justify-between">
-
             <button
               type="button"
               onClick={() =>
@@ -1190,7 +1259,6 @@ const Checkout = () => {
                 Secure Checkout
               </span>
             </div>
-
           </div>
         </div>
       </div>
@@ -1200,7 +1268,6 @@ const Checkout = () => {
       =================================================== */}
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
-
         {/* PAGE TITLE */}
 
         <div className="mb-8">
@@ -1237,7 +1304,6 @@ const Checkout = () => {
         ================================================= */}
 
         <div className="hidden md:flex items-center mb-10">
-
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-black text-white flex items-center justify-center text-sm font-semibold">
               <FiCheck size={16} />
@@ -1289,7 +1355,6 @@ const Checkout = () => {
               </p>
             </div>
           </div>
-
         </div>
 
         {/* =================================================
@@ -1300,21 +1365,16 @@ const Checkout = () => {
           onSubmit={handleSubmit}
           className="grid grid-cols-1 lg:grid-cols-[1fr_430px] gap-6 lg:gap-8"
         >
-
           {/* =================================================
               LEFT
           ================================================= */}
 
           <div className="space-y-6">
-
             {/* CONTACT */}
 
             <section className="bg-white border border-gray-200 rounded-3xl p-5 sm:p-7 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
-
               <div className="flex items-start justify-between mb-7">
-
                 <div className="flex items-center gap-4">
-
                   <div className="w-11 h-11 rounded-2xl bg-gray-100 flex items-center justify-center">
                     <FiUser
                       size={20}
@@ -1332,17 +1392,14 @@ const Checkout = () => {
                       you about your order.
                     </p>
                   </div>
-
                 </div>
 
                 <span className="hidden sm:block text-xs font-medium text-gray-400">
                   Required fields
                 </span>
-
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-
                 {/* NAME */}
 
                 <div>
@@ -1354,7 +1411,6 @@ const Checkout = () => {
                   </label>
 
                   <div className="relative">
-
                     <FiUser
                       size={17}
                       className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
@@ -1374,7 +1430,6 @@ const Checkout = () => {
                       disabled={loading}
                       className="w-full h-13 border border-gray-200 rounded-2xl bg-gray-50/60 pl-11 pr-4 text-sm outline-none transition-all duration-200 focus:bg-white focus:border-gray-900 focus:ring-4 focus:ring-gray-900/5 disabled:opacity-60"
                     />
-
                   </div>
                 </div>
 
@@ -1389,7 +1444,6 @@ const Checkout = () => {
                   </label>
 
                   <div className="relative">
-
                     <FiPhone
                       size={17}
                       className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
@@ -1411,20 +1465,17 @@ const Checkout = () => {
                       disabled={loading}
                       className="w-full h-13 border border-gray-200 rounded-2xl bg-gray-50/60 pl-11 pr-4 text-sm outline-none transition-all duration-200 focus:bg-white focus:border-gray-900 focus:ring-4 focus:ring-gray-900/5 disabled:opacity-60"
                     />
-
                   </div>
                 </div>
-
               </div>
-
             </section>
 
-            {/* DELIVERY ADDRESS */}
+            {/* =================================================
+                DELIVERY ADDRESS
+            ================================================= */}
 
             <section className="bg-white border border-gray-200 rounded-3xl p-5 sm:p-7 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
-
               <div className="flex items-center gap-4 mb-7">
-
                 <div className="w-11 h-11 rounded-2xl bg-gray-100 flex items-center justify-center">
                   <FiMapPin
                     size={20}
@@ -1442,134 +1493,11 @@ const Checkout = () => {
                     your order?
                   </p>
                 </div>
-
               </div>
 
-              {/* DISTRICT + THANA */}
+              {/* FULL ADDRESS */}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-
-                {/* DISTRICT */}
-
-                <div>
-                  <label className="block text-sm font-semibold mb-2">
-                    District
-                    <span className="text-red-500 ml-1">
-                      *
-                    </span>
-                  </label>
-
-                  <select
-                    name="district"
-                    value={
-                      formData.district
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    disabled={loading}
-                    className="w-full h-13 border border-gray-200 rounded-2xl bg-gray-50/60 px-4 text-sm outline-none cursor-pointer transition-all focus:bg-white focus:border-gray-900 focus:ring-4 focus:ring-gray-900/5 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <option value="">
-                      Select your district
-                    </option>
-
-                    {districtList.map(
-                      (
-                        item,
-                        index
-                      ) => {
-                        const districtName =
-                          item?.district ??
-                          item?.name ??
-                          "";
-
-                        return (
-                          <option
-                            key={`${districtName}-${index}`}
-                            value={
-                              districtName
-                            }
-                          >
-                            {
-                              districtName
-                            }
-                          </option>
-                        );
-                      }
-                    )}
-                  </select>
-
-                </div>
-
-                {/* THANA */}
-
-                <div>
-                  <label className="block text-sm font-semibold mb-2">
-                    Thana
-                    <span className="text-red-500 ml-1">
-                      *
-                    </span>
-                  </label>
-
-                  <select
-                    name="thana"
-                    value={
-                      formData.thana
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    disabled={
-                      !formData.district ||
-                      loading
-                    }
-                    className="w-full h-13 border border-gray-200 rounded-2xl bg-gray-50/60 px-4 text-sm outline-none cursor-pointer transition-all focus:bg-white focus:border-gray-900 focus:ring-4 focus:ring-gray-900/5 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <option value="">
-                      {formData.district
-                        ? thanaList.length
-                          ? "Select your thana"
-                          : "No thana available"
-                        : "Select district first"}
-                    </option>
-
-                    {thanaList.map(
-                      (
-                        thana,
-                        index
-                      ) => {
-                        const thanaName =
-                          typeof thana ===
-                          "string"
-                            ? thana
-                            : thana?.name ??
-                              "";
-
-                        return (
-                          <option
-                            key={`${thanaName}-${index}`}
-                            value={
-                              thanaName
-                            }
-                          >
-                            {
-                              thanaName
-                            }
-                          </option>
-                        );
-                      }
-                    )}
-                  </select>
-
-                </div>
-
-              </div>
-
-              {/* ADDRESS */}
-
-              <div className="mt-5">
-
+              <div>
                 <label className="block text-sm font-semibold mb-2">
                   Full Address
                   <span className="text-red-500 ml-1">
@@ -1585,29 +1513,25 @@ const Checkout = () => {
                   onChange={
                     handleChange
                   }
-                  rows={4}
+                  rows={3}
                   placeholder="House / Flat, Road, Area, Landmark..."
                   autoComplete="street-address"
                   disabled={loading}
-                  className="w-full border border-gray-200 rounded-2xl bg-gray-50/60 px-4 py-3.5 text-sm outline-none resize-none transition-all focus:bg-white focus:border-gray-900 focus:ring-4 focus:ring-gray-900/5 disabled:opacity-60"
+                  className="w-full border border-gray-200 rounded-2xl bg-gray-50/60 px-4 py-1.5 text-sm outline-none resize-none transition-all focus:bg-white focus:border-gray-900 focus:ring-4 focus:ring-gray-900/5 disabled:opacity-60"
                 />
-
               </div>
 
               {/* NOTE */}
 
               <div className="mt-5">
-
                 <label className="block text-sm font-semibold mb-2">
                   Order Note
-
                   <span className="text-xs font-normal text-gray-400 ml-2">
                     Optional
                   </span>
                 </label>
 
                 <div className="relative">
-
                   <FiFileText
                     size={17}
                     className="absolute left-4 top-4 text-gray-400"
@@ -1621,144 +1545,216 @@ const Checkout = () => {
                     onChange={
                       handleChange
                     }
-                    rows={3}
-                    placeholder="Any special delivery instructions?"
+                    rows={2}
+                    placeholder="আপনার মতামত থাকলে লিখুন"
                     disabled={loading}
                     className="w-full border border-gray-200 rounded-2xl bg-gray-50/60 pl-11 pr-4 py-3.5 text-sm outline-none resize-none transition-all focus:bg-white focus:border-gray-900 focus:ring-4 focus:ring-gray-900/5 disabled:opacity-60"
                   />
-
                 </div>
-
               </div>
-
             </section>
 
-            {/* PAYMENT + DELIVERY */}
+            {/* =================================================
+                DELIVERY AREA + PAYMENT
+            ================================================= */}
 
-            <section className="bg-white border border-gray-200 rounded-3xl p-5 sm:p-7 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+            <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)] sm:p-7">
+  {/* HEADER */}
+  <div className="mb-6 flex items-center gap-3.5">
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100">
+      <FiTruck size={18} className="text-gray-700" />
+    </div>
 
-              <div className="flex items-center gap-4 mb-6">
+    <div>
+      <h2 className="text-base font-bold text-gray-900 sm:text-lg">
+        Payment & Delivery
+      </h2>
 
-                <div className="w-11 h-11 rounded-2xl bg-gray-100 flex items-center justify-center">
-                  <span className="text-lg">
-                    💳
-                  </span>
-                </div>
+      <p className="mt-0.5 text-xs text-gray-400 sm:text-sm">
+        Choose your delivery area and payment method.
+      </p>
+    </div>
+  </div>
 
-                <div>
-                  <h2 className="text-lg font-bold">
-                    Payment & Delivery
-                  </h2>
+  {/* DELIVERY AREA */}
+  <div>
+    <label className="mb-3 block text-sm font-semibold text-gray-900">
+      Delivery Area
+      <span className="ml-1 text-red-500">*</span>
+    </label>
 
-                  <p className="text-sm text-gray-400 mt-0.5">
-                    Your payment and delivery
-                    charge.
-                  </p>
-                </div>
+    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+      {/* INSIDE DHAKA */}
+      <button
+        type="button"
+        onClick={() =>
+          handleDeliveryAreaChange("inside-dhaka")
+        }
+        disabled={loading}
+        aria-pressed={
+          formData.deliveryArea === "inside-dhaka"
+        }
+        className={`flex items-center justify-between rounded-xl border px-4 py-3.5 text-left transition-all duration-200 ${
+          formData.deliveryArea === "inside-dhaka"
+            ? "border-gray-900 bg-gray-50"
+            : "border-gray-200 bg-white hover:border-gray-400"
+        } disabled:cursor-not-allowed disabled:opacity-60`}
+      >
+        <div className="flex items-center gap-3">
+          {/* RADIO / CHECK ICON */}
+          <div
+            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all ${
+              formData.deliveryArea === "inside-dhaka"
+                ? "border-gray-900 bg-gray-900 text-white"
+                : "border-gray-300 bg-white"
+            }`}
+          >
+            {formData.deliveryArea === "inside-dhaka" && (
+              <FiCheck size={11} strokeWidth={3} />
+            )}
+          </div>
 
-              </div>
+          <div>
+            <p className="text-sm font-semibold text-gray-900">
+              ঢাকা শহরের ভিতরে
+            </p>
 
-              {/* COD */}
+            <p className="mt-0.5 text-[11px] text-gray-400">
+              Dhaka City
+            </p>
+          </div>
+        </div>
 
-              <div className="relative border-2 border-gray-900 bg-gray-50 rounded-2xl p-5">
+        <span className="text-sm font-bold text-gray-900">
+          ৳60
+        </span>
+      </button>
 
-                <div className="flex items-center justify-between">
+      {/* OUTSIDE DHAKA */}
+      <button
+        type="button"
+        onClick={() =>
+          handleDeliveryAreaChange("outside-dhaka")
+        }
+        disabled={loading}
+        aria-pressed={
+          formData.deliveryArea === "outside-dhaka"
+        }
+        className={`flex items-center justify-between rounded-xl border px-4 py-3.5 text-left transition-all duration-200 ${
+          formData.deliveryArea === "outside-dhaka"
+            ? "border-gray-900 bg-gray-50"
+            : "border-gray-200 bg-white hover:border-gray-400"
+        } disabled:cursor-not-allowed disabled:opacity-60`}
+      >
+        <div className="flex items-center gap-3">
+          {/* RADIO / CHECK ICON */}
+          <div
+            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all ${
+              formData.deliveryArea === "outside-dhaka"
+                ? "border-gray-900 bg-gray-900 text-white"
+                : "border-gray-300 bg-white"
+            }`}
+          >
+            {formData.deliveryArea === "outside-dhaka" && (
+              <FiCheck size={11} strokeWidth={3} />
+            )}
+          </div>
 
-                  <div className="flex items-center gap-4">
+          <div>
+            <p className="text-sm font-semibold text-gray-900">
+              ঢাকা শহরের বাইরে
+            </p>
 
-                    <div className="w-11 h-11 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                      💵
-                    </div>
+            <p className="mt-0.5 text-[11px] text-gray-400">
+              Outside Dhaka
+            </p>
+          </div>
+        </div>
 
-                    <div>
-                      <p className="font-semibold text-sm">
-                        Cash on Delivery
-                      </p>
+        <span className="text-sm font-bold text-gray-900">
+          ৳100
+        </span>
+      </button>
+    </div>
+  </div>
 
-                      <p className="text-xs text-gray-400 mt-1">
-                        Pay when your order
-                        arrives.
-                      </p>
-                    </div>
+  {/* COD */}
+  <div className="mt-5 rounded-xl border border-gray-900 bg-gray-50 px-4 py-3.5">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm">
+          💵
+        </div>
 
-                  </div>
+        <div>
+          <p className="text-sm font-semibold text-gray-900">
+            Cash on Delivery
+          </p>
 
-                  <div className="w-5 h-5 rounded-full bg-black flex items-center justify-center">
-                    <div className="w-2 h-2 rounded-full bg-white" />
-                  </div>
+          <p className="mt-0.5 text-[11px] text-gray-400">
+            Pay when your order arrives.
+          </p>
+        </div>
+      </div>
 
-                </div>
+      {/* SELECTED */}
+      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-900 text-white">
+        <FiCheck size={11} strokeWidth={3} />
+      </div>
+    </div>
+  </div>
 
-              </div>
+  {/* DELIVERY CHARGE */}
+  <div className="mt-3.5 rounded-xl border border-gray-200 px-4 py-3.5">
+    <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100">
+          🚚
+        </div>
 
-              {/* DELIVERY CHARGE */}
+        <div>
+          <p className="text-sm font-semibold text-gray-900">
+            Delivery Charge
+          </p>
 
-              <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-5">
+          <p className="mt-0.5 text-[11px] text-gray-400">
+            {formData.deliveryArea === "inside-dhaka"
+              ? "Dhaka city delivery"
+              : formData.deliveryArea === "outside-dhaka"
+              ? "Outside Dhaka delivery"
+              : "Select your delivery area"}
+          </p>
+        </div>
+      </div>
 
-                <div className="flex items-center justify-between">
+      <div className="shrink-0 text-right">
+        {formData.deliveryArea ? (
+          <>
+            <p className="text-base font-bold text-gray-900">
+              ৳{deliveryCharge.toLocaleString()}
+            </p>
 
-                  <div className="flex items-center gap-4">
+            <div className="mt-0.5 flex items-center justify-end gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
 
-                    <div className="w-11 h-11 rounded-xl bg-gray-100 flex items-center justify-center">
-                      🚚
-                    </div>
+              <span className="text-[10px] font-medium text-green-600">
+                Selected
+              </span>
+            </div>
+          </>
+        ) : (
+          <span className="text-xs text-gray-400">—</span>
+        )}
+      </div>
+    </div>
+  </div>
+</section>
 
-                    <div>
-                      <p className="font-semibold text-sm text-gray-900">
-                        Delivery Charge
-                      </p>
-
-                      <p className="text-xs text-gray-400 mt-1">
-                        {formData.district
-                          ? cleanString(
-                              formData.district
-                            ).toLowerCase() ===
-                            "dhaka"
-                            ? "Dhaka delivery"
-                            : "Outside Dhaka delivery"
-                          : "Select your district first"}
-                      </p>
-                    </div>
-
-                  </div>
-
-                  <div className="text-right">
-
-                    {formData.district ? (
-                      <>
-                        <p className="text-lg font-bold text-gray-900">
-                          ৳
-                          {deliveryCharge.toLocaleString()}
-                        </p>
-
-                        <div className="mt-1 flex items-center justify-end gap-1">
-
-                          <div className="w-2 h-2 rounded-full bg-green-500" />
-
-                          <span className="text-[11px] font-medium text-green-600">
-                            Selected
-                          </span>
-
-                        </div>
-                      </>
-                    ) : (
-                      <span className="text-xs text-gray-400">
-                        —
-                      </span>
-                    )}
-
-                  </div>
-
-                </div>
-
-              </div>
-
-            </section>
-
-            {/* TRUST */}
+            {/* =================================================
+                TRUST
+            ================================================= */}
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-
               <div className="bg-white border border-gray-200 rounded-2xl p-4 flex items-center gap-3">
                 <div className="text-lg">
                   🔒
@@ -1806,9 +1802,7 @@ const Checkout = () => {
                   </p>
                 </div>
               </div>
-
             </div>
-
           </div>
 
           {/* =================================================
@@ -1816,364 +1810,244 @@ const Checkout = () => {
           ================================================= */}
 
           <div className="lg:col-span-1">
+  <div className="sticky top-6 overflow-hidden rounded-3xl bg-[#171717] text-white shadow-2xl">
+    {/* HEADER */}
+    <div className="border-b border-white/10 px-5 py-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/70">
+            Your order
+          </p>
 
-            <div className="sticky top-6 overflow-hidden rounded-3xl bg-[#171717] text-white shadow-2xl">
+          <h2 className="mt-1 text-lg font-semibold tracking-tight text-white">
+            Order Summary
+          </h2>
+        </div>
 
-              {/* SUMMARY HEADER */}
+        <span className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white">
+          {orderItems.length}{" "}
+          {orderItems.length === 1 ? "Item" : "Items"}
+        </span>
+      </div>
+    </div>
 
-              <div className="border-b border-white/10 px-6 py-5">
-
-                <div className="flex items-center justify-between">
-
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-[0.18em] text-white/40">
-                      Your order
-                    </p>
-
-                    <h2 className="mt-1 text-xl font-bold text-white">
-                      Order Summary
-                    </h2>
-                  </div>
-
-                  <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/70">
-                    {orderItems.length}{" "}
-                    {orderItems.length === 1
-                      ? "Item"
-                      : "Items"}
-                  </span>
-
+    {/* PRODUCTS */}
+    <div className="space-y-3 px-5 py-4">
+      {orderItems.map((item, index) => (
+        <div
+          key={`${item.productId}-${item.variantId || "default"}-${
+            item.selectedSize || "default"
+          }-${index}`}
+          className="rounded-xl border border-white/10 bg-white/[0.04] p-3"
+        >
+          <div className="flex gap-3">
+            {/* IMAGE */}
+            <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-white">
+              {item.productImage ? (
+                <img
+                  src={item.productImage}
+                  alt={item.productName}
+                  className="h-full w-full object-cover"
+                  onError={(event) => {
+                    event.currentTarget.style.display = "none";
+                  }}
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center text-[10px] text-gray-500">
+                  No Image
                 </div>
-
-              </div>
-
-              {/* PRODUCTS */}
-
-              <div className="custom-scrollbar max-h-[360px] space-y-4 overflow-y-auto px-6 py-5">
-
-                {orderItems.map(
-                  (item, index) => (
-                    <div
-                      key={`${item.productId}-${item.variantId || "default"}-${item.selectedSize || "default"}-${index}`}
-                      className="rounded-2xl border border-white/10 bg-white/[0.05] p-3"
-                    >
-
-                      <div className="flex gap-4">
-
-                        {/* IMAGE */}
-
-                        <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-white">
-
-                          {item.productImage ? (
-                            <img
-                              src={
-                                item.productImage
-                              }
-                              alt={
-                                item.productName
-                              }
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-full items-center justify-center text-xs text-gray-400">
-                              No Image
-                            </div>
-                          )}
-
-                        </div>
-
-                        {/* PRODUCT */}
-
-                        <div className="min-w-0 flex-1">
-
-                          <h3 className="line-clamp-2 text-sm font-semibold text-white">
-                            {
-                              item.productName
-                            }
-                          </h3>
-
-                          {(item.selectedColor ||
-                            item.selectedSize) && (
-                            <div className="mt-2 flex flex-wrap gap-1.5">
-
-                              {item.selectedColor && (
-                                <span className="rounded-md bg-white/10 px-2 py-1 text-[10px] text-white/60">
-                                  Color:{" "}
-                                  {
-                                    item.selectedColor
-                                  }
-                                </span>
-                              )}
-
-                              {item.selectedSize && (
-                                <span className="rounded-md bg-white/10 px-2 py-1 text-[10px] text-white/60">
-                                  Size:{" "}
-                                  {
-                                    item.selectedSize
-                                  }
-                                </span>
-                              )}
-
-                            </div>
-                          )}
-
-                          <p className="mt-2 text-xs text-white/45">
-                            ৳
-                            {Number(
-                              item.price
-                            ).toLocaleString()}{" "}
-                            ×{" "}
-                            {
-                              item.quantity
-                            }
-                          </p>
-
-                          <p className="mt-1 text-sm font-bold text-white">
-                            ৳
-                            {Number(
-                              item.subtotal
-                            ).toLocaleString()}
-                          </p>
-
-                        </div>
-
-                        {/* DELETE */}
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            removeItem(
-                              index
-                            )
-                          }
-                          disabled={
-                            loading
-                          }
-                          className="self-start rounded-lg p-2 text-white/30 transition hover:bg-red-500/10 hover:text-red-400 disabled:opacity-30"
-                          aria-label="Remove item"
-                        >
-                          <FiTrash2
-                            size={15}
-                          />
-                        </button>
-
-                      </div>
-
-                      {/* QUANTITY */}
-
-                      <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3">
-
-                        <span className="text-xs text-white/40">
-                          Quantity
-                        </span>
-
-                        <div className="flex items-center gap-2">
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              decreaseQuantity(
-                                index
-                              )
-                            }
-                            disabled={
-                              loading ||
-                              item.quantity <=
-                                1
-                            }
-                            className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-30"
-                          >
-                            <FiMinus
-                              size={13}
-                            />
-                          </button>
-
-                          <span className="min-w-[24px] text-center text-sm font-semibold">
-                            {
-                              item.quantity
-                            }
-                          </span>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              increaseQuantity(
-                                index
-                              )
-                            }
-                            disabled={
-                              loading
-                            }
-                            className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 text-white transition hover:bg-white/20 disabled:opacity-30"
-                          >
-                            <FiPlus
-                              size={13}
-                            />
-                          </button>
-
-                        </div>
-
-                      </div>
-
-                    </div>
-                  )
-                )}
-
-              </div>
-
-              {/* PRICE */}
-
-              <div className="border-t border-white/10 px-6 py-5">
-
-                <div className="space-y-3">
-
-                  <div className="flex items-center justify-between text-sm">
-
-                    <span className="text-white/55">
-                      Subtotal
-                    </span>
-
-                    <span className="font-medium text-white">
-                      ৳
-                      {subtotal.toLocaleString()}
-                    </span>
-
-                  </div>
-
-                  <div className="flex items-center justify-between text-sm">
-
-                    <span className="text-white/55">
-                      Delivery Charge
-                    </span>
-
-                    <span className="font-semibold text-white">
-
-                      {formData.district ? (
-                        <>
-                          ৳
-                          {deliveryCharge.toLocaleString()}
-                        </>
-                      ) : (
-                        <span className="text-xs font-normal text-white/35">
-                          Select district
-                        </span>
-                      )}
-
-                    </span>
-
-                  </div>
-
-                </div>
-
-                {/* TOTAL */}
-
-                <div className="mt-5 border-t border-white/10 pt-5">
-
-                  <div className="flex items-end justify-between">
-
-                    <div>
-
-                      <p className="text-xs uppercase tracking-wider text-white/40">
-                        Total
-                      </p>
-
-                      <p className="mt-1 text-3xl font-black tracking-tight text-white">
-                        ৳
-                        {total.toLocaleString()}
-                      </p>
-
-                    </div>
-
-                    <span className="mb-1 rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-300">
-                      COD
-                    </span>
-
-                  </div>
-
-                </div>
-
-              </div>
-
-              {/* PAYMENT INFO */}
-
-              <div className="mx-6 mb-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-
-                <div className="flex items-start gap-3">
-
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10">
-                    💵
-                  </div>
-
-                  <div>
-
-                    <p className="text-sm font-semibold text-white">
-                      Cash on Delivery
-                    </p>
-
-                    <p className="mt-1 text-xs leading-5 text-white/45">
-                      Pay securely when your
-                      order arrives at your
-                      doorstep.
-                    </p>
-
-                  </div>
-
-                </div>
-
-              </div>
-
-              {/* CONFIRM */}
-
-              <div className="px-6 pb-6">
-
-                <button
-                  type="submit"
-                  disabled={
-                    loading ||
-                    !orderItems.length
-                  }
-                  className="group flex w-full items-center justify-center gap-3 rounded-2xl bg-white px-5 py-4 text-sm font-bold text-black shadow-lg transition-all duration-200 hover:bg-gray-100 hover:shadow-xl active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-
-                  {loading ? (
-                    <>
-                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-black" />
-
-                      <span>
-                        Placing Order...
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <FiCheck
-                        size={18}
-                        className="transition-transform group-hover:scale-110"
-                      />
-
-                      <span>
-                        Confirm Order
-                      </span>
-                    </>
-                  )}
-
-                </button>
-
-                <div className="mt-3 flex items-center justify-center gap-2 text-[11px] text-white/30">
-                  <FiLock size={12} />
-
-                  <span>
-                    Secure & encrypted
-                    checkout
-                  </span>
-                </div>
-
-              </div>
-
+              )}
             </div>
 
+            {/* PRODUCT INFO */}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="line-clamp-2 text-[13px] font-semibold leading-5 text-white">
+                  {item.productName}
+                </h3>
+
+                {/* DELETE */}
+                <button
+                  type="button"
+                  onClick={() => removeItem(index)}
+                  disabled={loading}
+                  className="shrink-0 rounded-md p-1.5 text-white/70 transition hover:bg-red-500/10 hover:text-red-400 disabled:opacity-30"
+                  aria-label="Remove item"
+                >
+                  <FiTrash2 size={13} />
+                </button>
+              </div>
+
+              {/* VARIANTS */}
+              {(item.selectedColor || item.selectedSize) && (
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {item.selectedColor && (
+                    <span className="rounded-md bg-white/10 px-2 py-1 text-[10px] text-white">
+                      Color: {item.selectedColor}
+                    </span>
+                  )}
+
+                  {item.selectedSize && (
+                    <span className="rounded-md bg-white/10 px-2 py-1 text-[10px] text-white">
+                      Size: {item.selectedSize}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* PRICE */}
+              <div className="mt-2 flex items-center justify-between">
+                <span className="text-[10px] text-white/70">
+                  ৳{Number(item.price).toLocaleString()} ×{" "}
+                  {item.quantity}
+                </span>
+
+                <span className="text-xs font-semibold text-white">
+                  ৳{Number(item.subtotal).toLocaleString()}
+                </span>
+              </div>
+            </div>
           </div>
 
-        </form>
+          {/* QUANTITY */}
+          <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3">
+            <span className="text-[10px] text-white/70">
+              Quantity
+            </span>
 
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => decreaseQuantity(index)}
+                disabled={loading || item.quantity <= 1}
+                className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                <FiMinus size={12} />
+              </button>
+
+              <span className="min-w-[24px] text-center text-xs font-semibold text-white">
+                {item.quantity}
+              </span>
+
+              <button
+                type="button"
+                onClick={() => increaseQuantity(index)}
+                disabled={loading}
+                className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 text-white transition hover:bg-white/20 disabled:opacity-30"
+              >
+                <FiPlus size={12} />
+              </button>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    {/* PRICE */}
+    <div className="border-t border-white/10 px-5 py-4">
+      <div className="space-y-2.5">
+        {/* SUBTOTAL */}
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-white/70">
+            Subtotal
+          </span>
+
+          <span className="font-medium text-white">
+            ৳{subtotal.toLocaleString()}
+          </span>
+        </div>
+
+        {/* DELIVERY */}
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-white/70">
+            Delivery Charge
+          </span>
+
+          <span className="font-medium text-white">
+            {formData.deliveryArea ? (
+              <>৳{deliveryCharge.toLocaleString()}</>
+            ) : (
+              <span className="text-[10px] text-white/70">
+                Select delivery area
+              </span>
+            )}
+          </span>
+        </div>
+      </div>
+
+      {/* TOTAL */}
+      <div className="mt-4 border-t border-white/10 pt-4">
+        <div className="flex items-end justify-between">
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.16em] text-white/70">
+              Total
+            </p>
+
+            <p className="mt-1 text-2xl font-bold tracking-tight text-white">
+              ৳{total.toLocaleString()}
+            </p>
+          </div>
+
+          <span className="mb-1 rounded-full bg-emerald-400/10 px-2.5 py-1 text-[15px] font-semibold text-green-400">
+            COD
+          </span>
+        </div>
+      </div>
+    </div>
+
+    {/* PAYMENT INFO */}
+    <div className="mx-5 mb-4 rounded-xl border border-white/10 bg-white/[0.04] p-3.5">
+      <div className="flex items-center gap-3">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10">
+          💵
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-white">
+            Cash on Delivery
+          </p>
+
+          <p className="mt-1 text-[10px] text-white/70">
+            Pay securely when your order arrives
+          </p>
+        </div>
+      </div>
+    </div>
+
+    {/* CONFIRM */}
+    <div className="px-5 pb-5">
+      <button
+        type="submit"
+        disabled={loading || !orderItems.length}
+        className="cursor-pointer group flex w-full items-center justify-center gap-2.5 rounded-xl bg-white px-4 py-3.5 text-xs font-bold text-black shadow-lg transition-all duration-200 hover:bg-gray-100 hover:shadow-xl active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {loading ? (
+          <>
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-black" />
+
+            <span>Placing Order...</span>
+          </>
+        ) : (
+          <>
+            <FiCheck
+              size={16}
+              className="transition-transform group-hover:scale-110"
+            />
+
+            <span className="">Confirm Order</span>
+          </>
+        )}
+      </button>
+
+      <div className="mt-2.5 flex items-center justify-center gap-1.5 text-[9px] text-white/70">
+        <FiLock size={10} />
+
+        <span>Secure & encrypted checkout</span>
+      </div>
+    </div>
+  </div>
+</div>
+        </form>
       </div>
 
       {/* ===================================================
@@ -2198,6 +2072,18 @@ const Checkout = () => {
           .custom-scrollbar::-webkit-scrollbar-thumb:hover {
             background: rgba(255, 255, 255, 0.25);
           }
+
+          @keyframes popupIn {
+            from {
+              opacity: 0;
+              transform: translateY(12px) scale(0.97);
+            }
+
+            to {
+              opacity: 1;
+              transform: translateY(0) scale(1);
+            }
+          }
         `}
       </style>
 
@@ -2217,14 +2103,12 @@ const Checkout = () => {
             }
           }}
         >
-
           <div
             className="relative w-full max-w-[390px] overflow-hidden rounded-[28px] bg-white shadow-[0_25px_80px_rgba(0,0,0,0.25)] animate-[popupIn_.22s_ease-out]"
             onMouseDown={(event) =>
               event.stopPropagation()
             }
           >
-
             {/* CLOSE */}
 
             <button
@@ -2239,17 +2123,16 @@ const Checkout = () => {
             {/* CONTENT */}
 
             <div className="px-7 pb-7 pt-8 text-center">
-
               {/* ICON */}
 
               <div
                 className={`mx-auto flex h-16 w-16 items-center justify-center rounded-2xl ${
-                  popup.type === "success"
+                  popup.type ===
+                  "success"
                     ? "bg-emerald-50"
                     : "bg-red-50"
                 }`}
               >
-
                 {popup.type ===
                 "success" ? (
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500 text-white shadow-sm">
@@ -2266,7 +2149,6 @@ const Checkout = () => {
                     />
                   </div>
                 )}
-
               </div>
 
               {/* TITLE */}
@@ -2286,41 +2168,39 @@ const Checkout = () => {
               {popup.type ===
                 "success" && (
                 <div className="mt-5 overflow-hidden rounded-2xl border border-gray-100 bg-gray-50">
-
                   {/* ORDER ID */}
 
                   {popup.orderId && (
                     <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-
                       <span className="text-xs text-gray-400">
                         Order ID
                       </span>
 
                       <span className="max-w-[180px] truncate text-xs font-semibold text-gray-800">
-                        {popup.orderId}
+                        {
+                          popup.orderId
+                        }
                       </span>
-
                     </div>
                   )}
 
                   {/* QUANTITY */}
 
                   <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-
                     <span className="text-xs text-gray-400">
                       Items
                     </span>
 
                     <span className="text-sm font-semibold text-gray-800">
-                      {popup.quantity}
+                      {
+                        popup.quantity
+                      }
                     </span>
-
                   </div>
 
                   {/* TOTAL */}
 
                   <div className="flex items-center justify-between px-4 py-3">
-
                     <span className="text-xs text-gray-400">
                       Total
                     </span>
@@ -2331,73 +2211,138 @@ const Checkout = () => {
                         popup.total
                       ).toLocaleString()}
                     </span>
-
                   </div>
-
                 </div>
               )}
 
-              {/* ERROR SMALL BOX */}
+              {/* =================================================
+                  ERROR SUPPORT
+              ================================================= */}
 
-              {popup.type === "error" && popup.support && (
-  <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
-    <p className="text-sm font-medium text-gray-700">
-      অর্ডার করতে কি কোনো সমস্যা হচ্ছে?
-    </p>
+              {popup.type ===
+                "error" &&
+                popup.support && (
+                  <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4 text-left">
+                    <p className="text-sm font-semibold text-gray-700">
+                      অর্ডার করতে কি কোনো
+                      সমস্যা হচ্ছে?
+                    </p>
 
-    <p className="mt-1 text-xs text-gray-500">
-      সমস্যাটি সমাধান না হলে আমাদের Facebook পেজে যোগাযোগ করুন অথবা WhatsApp-এর মাধ্যমে সরাসরি অর্ডার করুন।
-    </p>
+                    <p className="mt-1 text-xs leading-5 text-gray-500">
+                      সমস্যাটি সমাধান না
+                      হলে আমাদের Facebook
+                      পেজে যোগাযোগ করুন
+                      অথবা WhatsApp-এর
+                      মাধ্যমে সরাসরি অর্ডার
+                      করুন।
+                    </p>
 
-    {/* Facebook */}
-    <a
-      href={popup.support.facebook}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="mt-4 flex items-center justify-center rounded-xl bg-[#1877F2] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
-    >
-      Order / Contact on Facebook
-    </a>
+                    {/* FACEBOOK */}
 
-    {/* Mobile */}
-    <div className="mt-3 flex items-center justify-between rounded-xl bg-white px-3 py-2.5">
-      <div>
-        <p className="text-[11px] text-gray-400">Mobile</p>
-        <p className="text-sm font-semibold text-gray-800">
-          {popup.support.mobile}
-        </p>
-      </div>
+                    <a
+                      href={
+                        popup.support
+                          .facebook
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-4 flex items-center justify-center rounded-xl bg-[#1877F2] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+                    >
+                      Facebook-এ যোগাযোগ করুন
+                    </a>
 
-      <button
-        onClick={() =>
-          navigator.clipboard.writeText(popup.support.mobile)
-        }
-        className="rounded-lg bg-gray-100 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-200"
-      >
-        Copy
-      </button>
-    </div>
+                    {/* MOBILE */}
 
-    {/* WhatsApp */}
-    <div className="mt-2 flex items-center justify-between rounded-xl bg-white px-3 py-2.5">
-      <div>
-        <p className="text-[11px] text-gray-400">WhatsApp</p>
-        <p className="text-sm font-semibold text-gray-800">
-          {popup.support.whatsapp}
-        </p>
-      </div>
+                    <div className="mt-3 flex items-center justify-between rounded-xl bg-white px-3 py-2.5 border border-gray-100">
+                      <div>
+                        <p className="text-[11px] text-gray-400">
+                          Mobile
+                        </p>
 
-      <button
-        onClick={() =>
-          navigator.clipboard.writeText(popup.support.whatsapp)
-        }
-        className="rounded-lg bg-gray-100 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-200"
-      >
-        Copy
-      </button>
-    </div>
-  </div>
-)}
+                        <p className="text-sm font-semibold text-gray-800">
+                          {
+                            popup
+                              .support
+                              .mobile
+                          }
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          copySupportNumber(
+                            popup
+                              .support
+                              .mobile
+                          )
+                        }
+                        className="rounded-lg bg-gray-100 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-200"
+                      >
+                        Copy
+                      </button>
+                    </div>
+
+                    {/* WHATSAPP */}
+
+                    <a
+                      href={`https://wa.me/88${popup.support.whatsapp}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 flex items-center justify-between rounded-xl bg-[#25D366] px-3 py-2.5 text-white"
+                    >
+                      <div>
+                        <p className="text-[11px] text-white/70">
+                          WhatsApp
+                        </p>
+
+                        <p className="text-sm font-semibold">
+                          {
+                            popup
+                              .support
+                              .whatsapp
+                          }
+                        </p>
+                      </div>
+
+                      <span className="rounded-lg bg-white/15 px-3 py-2 text-xs font-semibold">
+                        সরাসরি অর্ডার
+                      </span>
+                    </a>
+
+                    {/* COPY WHATSAPP */}
+
+                    <div className="mt-2 flex items-center justify-between rounded-xl bg-white px-3 py-2.5 border border-gray-100">
+                      <div>
+                        <p className="text-[11px] text-gray-400">
+                          WhatsApp Number
+                        </p>
+
+                        <p className="text-sm font-semibold text-gray-800">
+                          {
+                            popup
+                              .support
+                              .whatsapp
+                          }
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          copySupportNumber(
+                            popup
+                              .support
+                              .whatsapp
+                          )
+                        }
+                        className="rounded-lg bg-gray-100 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-200"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                )}
 
               {/* ACTION */}
 
@@ -2424,10 +2369,9 @@ const Checkout = () => {
                   onClick={closePopup}
                   className="mt-6 w-full rounded-2xl bg-black px-5 py-3.5 text-sm font-semibold text-white transition-all hover:bg-gray-800 active:scale-[0.98]"
                 >
-                  Okay, Got It
+                  ঠিক আছে
                 </button>
               )}
-
             </div>
 
             {/* SUCCESS FOOTER */}
@@ -2435,39 +2379,15 @@ const Checkout = () => {
             {popup.type ===
               "success" && (
               <div className="border-t border-gray-100 bg-gray-50 px-6 py-3 text-center">
-
                 <p className="text-[11px] text-gray-400">
                   Thank you for shopping
                   with Spriengge.
                 </p>
-
               </div>
             )}
-
           </div>
         </div>
       )}
-
-      {/* ===================================================
-          POPUP ANIMATION
-      =================================================== */}
-
-      <style>
-        {`
-          @keyframes popupIn {
-            from {
-              opacity: 0;
-              transform: translateY(12px) scale(0.97);
-            }
-
-            to {
-              opacity: 1;
-              transform: translateY(0) scale(1);
-            }
-          }
-        `}
-      </style>
-
     </div>
   );
 };
