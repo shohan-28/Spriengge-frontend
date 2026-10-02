@@ -8,11 +8,14 @@ import { RouterProvider } from "react-router-dom";
 import router from "./Routes.jsx";
 
 import { PersistGate } from "redux-persist/integration/react";
+import ErrorBoundary from "./components/ErrorBoundary/ErrorBoundary.jsx";
 
 createRoot(document.getElementById("root")).render(
-  <Provider store={store}>
-    <PersistGate loading={null} persistor={persistor}>
-      <RouterProvider router={router} />
-    </PersistGate>
-  </Provider>
+   <ErrorBoundary>
+    <Provider store={store}>
+      <PersistGate loading={null} persistor={persistor}>
+        <RouterProvider router={router} />
+      </PersistGate>
+    </Provider>
+  </ErrorBoundary>
 );

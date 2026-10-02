@@ -13,6 +13,7 @@ import MakeupOne from "./components/LandingPage/MakeupOne";
 import Products from "./components/Products/Products";
 import CarouselOne from "./Carousel/CarouselOne";
 import FooterTwo from "./components/Footer/FooterTwo";
+import NotFound from "./components/ErrorBoundary/NotFound";
 
 const router = createBrowserRouter([
   {
@@ -77,7 +78,11 @@ const router = createBrowserRouter([
       {
         path: "/FooterTwo",
         element: <FooterTwo />,
-      }
+      },
+      {
+  path: "*",
+  element: <NotFound />,
+}
     ],
   },
 ]);
