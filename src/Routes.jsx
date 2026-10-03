@@ -9,11 +9,12 @@ import Services from "./components/Services/Services";
 import CartPage from "./components/CartPage/CartPage";
 import Checkout from "./components/CheckOut/CheckOut";
 import SideCart from "./components/SideCart/SideCart";
-import MakeupOne from "./components/LandingPage/MakeupOne";
+
 import Products from "./components/Products/Products";
 import CarouselOne from "./Carousel/CarouselOne";
 import FooterTwo from "./components/Footer/FooterTwo";
 import NotFound from "./components/ErrorBoundary/NotFound";
+import LandingPage from "./components/LandingPage/LandingPage";
 
 const router = createBrowserRouter([
   {
@@ -67,8 +68,8 @@ const router = createBrowserRouter([
       },
 
       {
-        path: "/MakeupOne/:id",
-        element: <MakeupOne />,
+        path: "/LandingPage/:id",
+        element: <LandingPage />,
       },
 
       {
