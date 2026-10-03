@@ -215,7 +215,7 @@ const getProductsFromResponse = (data) => {
    COMPONENT
 ========================================================= */
 
-const MakeupOne = () => {
+const LandingPage = () => {
   const { id } = useParams();
 
   /* =======================================================
@@ -2225,4 +2225,4 @@ const PremiumInput = ({
   );
 };
 
-export default MakeupOne;
+export default LandingPage;
