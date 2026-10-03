@@ -44,6 +44,37 @@ const SUPPORT = {
 };
 
 /* =========================================================
+   META PIXEL EVENT HELPER
+========================================================= */
+
+const trackMetaEvent = (
+  eventName,
+  params = {},
+  options = {}
+) => {
+  if (
+    typeof window === "undefined" ||
+    typeof window.fbq !== "function"
+  ) {
+    return;
+  }
+
+  try {
+    window.fbq(
+      "track",
+      eventName,
+      params,
+      options
+    );
+  } catch (error) {
+    console.error(
+      `Meta Pixel ${eventName} tracking failed:`,
+      error
+    );
+  }
+};
+
+/* =========================================================
    HELPERS
 ========================================================= */
 
@@ -949,7 +980,7 @@ const Checkout = () => {
 
     /* -----------------------------------------------------
        ORDER PAYLOAD
-       
+
        IMPORTANT:
        district / thana এখানে নেই।
     ----------------------------------------------------- */
@@ -1105,6 +1136,109 @@ const Checkout = () => {
         data?._id ||
         "";
 
+      /* ===================================================
+         META PIXEL — PURCHASE
+         
+         IMPORTANT:
+         এখানে backend order success হওয়ার পরেই
+         Purchase event fire হচ্ছে।
+
+         Validation error হলে এখানে আসবে না।
+         Backend error হলে এখানে আসবে না।
+         Buy Now click করলেই এখানে আসবে না।
+      =================================================== */
+
+      const purchaseEventId =
+        orderId
+          ? String(orderId)
+          : `order_${Date.now()}_${Math.random()
+              .toString(36)
+              .slice(2, 10)}`;
+
+      /* ---------------------------------------------------
+         ALL PURCHASED PRODUCT IDS
+         
+         Cart হলে একাধিক product থাকতে পারে।
+         Buy Now হলে সাধারণত একটি product থাকবে।
+      --------------------------------------------------- */
+
+      const purchaseContentIds = [
+        ...new Set(
+          orderItems
+            .map((item) =>
+              normalizeProductId(
+                item?.productId
+              )
+            )
+            .filter(Boolean)
+            .map((id) =>
+              String(id)
+            )
+        ),
+      ];
+
+      /* ---------------------------------------------------
+         PURCHASE EVENT
+      --------------------------------------------------- */
+
+      trackMetaEvent(
+        "Purchase",
+        {
+          content_ids:
+            purchaseContentIds,
+
+          content_type:
+            "product",
+
+          value:
+            Number(finalTotal),
+
+          currency:
+            "BDT",
+
+          num_items:
+            orderItems.reduce(
+              (sum, item) =>
+                sum +
+                Number(
+                  item?.quantity || 0
+                ),
+              0
+            ),
+        },
+        {
+          eventID:
+            purchaseEventId,
+        }
+      );
+
+      console.log(
+        "META PURCHASE EVENT SENT:",
+        {
+          eventID:
+            purchaseEventId,
+
+          content_ids:
+            purchaseContentIds,
+
+          value:
+            Number(finalTotal),
+
+          currency:
+            "BDT",
+
+          num_items:
+            orderItems.reduce(
+              (sum, item) =>
+                sum +
+                Number(
+                  item?.quantity || 0
+                ),
+              0
+            ),
+        }
+      );
+
       /* ---------------------------------------------------
          ORDERED QUANTITY
       --------------------------------------------------- */
@@ -1158,6 +1292,13 @@ const Checkout = () => {
         "ORDER ERROR:",
         error
       );
+
+      /* ---------------------------------------------------
+         IMPORTANT:
+         এখানে Purchase event fire করা হবে না।
+         
+         কারণ backend order সফল হয়নি।
+      --------------------------------------------------- */
 
       /* ---------------------------------------------------
          ERROR POPUP
@@ -1559,196 +1700,230 @@ const Checkout = () => {
             ================================================= */}
 
             <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)] sm:p-7">
-  {/* HEADER */}
-  <div className="mb-6 flex items-center gap-3.5">
-    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100">
-      <FiTruck size={18} className="text-gray-700" />
-    </div>
+              {/* HEADER */}
 
-    <div>
-      <h2 className="text-base font-bold text-gray-900 sm:text-lg">
-        Payment & Delivery
-      </h2>
+              <div className="mb-6 flex items-center gap-3.5">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100">
+                  <FiTruck
+                    size={18}
+                    className="text-gray-700"
+                  />
+                </div>
 
-      <p className="mt-0.5 text-xs text-gray-400 sm:text-sm">
-        Choose your delivery area and payment method.
-      </p>
-    </div>
-  </div>
+                <div>
+                  <h2 className="text-base font-bold text-gray-900 sm:text-lg">
+                    Payment & Delivery
+                  </h2>
 
-  {/* DELIVERY AREA */}
-  <div>
-    <label className="mb-3 block text-sm font-semibold text-gray-900">
-      Delivery Area
-      <span className="ml-1 text-red-500">*</span>
-    </label>
+                  <p className="mt-0.5 text-xs text-gray-400 sm:text-sm">
+                    Choose your delivery area and payment method.
+                  </p>
+                </div>
+              </div>
 
-    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-      {/* INSIDE DHAKA */}
-      <button
-        type="button"
-        onClick={() =>
-          handleDeliveryAreaChange("inside-dhaka")
-        }
-        disabled={loading}
-        aria-pressed={
-          formData.deliveryArea === "inside-dhaka"
-        }
-        className={`flex items-center justify-between rounded-xl border px-4 py-3.5 text-left transition-all duration-200 ${
-          formData.deliveryArea === "inside-dhaka"
-            ? "border-gray-900 bg-gray-50"
-            : "border-gray-200 bg-white hover:border-gray-400"
-        } disabled:cursor-not-allowed disabled:opacity-60`}
-      >
-        <div className="flex items-center gap-3">
-          {/* RADIO / CHECK ICON */}
-          <div
-            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all ${
-              formData.deliveryArea === "inside-dhaka"
-                ? "border-gray-900 bg-gray-900 text-white"
-                : "border-gray-300 bg-white"
-            }`}
-          >
-            {formData.deliveryArea === "inside-dhaka" && (
-              <FiCheck size={11} strokeWidth={3} />
-            )}
-          </div>
+              {/* DELIVERY AREA */}
 
-          <div>
-            <p className="text-sm font-semibold text-gray-900">
-              ঢাকা শহরের ভিতরে
-            </p>
+              <div>
+                <label className="mb-3 block text-sm font-semibold text-gray-900">
+                  Delivery Area
+                  <span className="ml-1 text-red-500">
+                    *
+                  </span>
+                </label>
 
-            <p className="mt-0.5 text-[11px] text-gray-400">
-              Dhaka City
-            </p>
-          </div>
-        </div>
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                  {/* INSIDE DHAKA */}
 
-        <span className="text-sm font-bold text-gray-900">
-          ৳60
-        </span>
-      </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleDeliveryAreaChange(
+                        "inside-dhaka"
+                      )
+                    }
+                    disabled={loading}
+                    aria-pressed={
+                      formData.deliveryArea ===
+                      "inside-dhaka"
+                    }
+                    className={`flex items-center justify-between rounded-xl border px-4 py-3.5 text-left transition-all duration-200 ${
+                      formData.deliveryArea ===
+                      "inside-dhaka"
+                        ? "border-gray-900 bg-gray-50"
+                        : "border-gray-200 bg-white hover:border-gray-400"
+                    } disabled:cursor-not-allowed disabled:opacity-60`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all ${
+                          formData.deliveryArea ===
+                          "inside-dhaka"
+                            ? "border-gray-900 bg-gray-900 text-white"
+                            : "border-gray-300 bg-white"
+                        }`}
+                      >
+                        {formData.deliveryArea ===
+                          "inside-dhaka" && (
+                          <FiCheck
+                            size={11}
+                            strokeWidth={3}
+                          />
+                        )}
+                      </div>
 
-      {/* OUTSIDE DHAKA */}
-      <button
-        type="button"
-        onClick={() =>
-          handleDeliveryAreaChange("outside-dhaka")
-        }
-        disabled={loading}
-        aria-pressed={
-          formData.deliveryArea === "outside-dhaka"
-        }
-        className={`flex items-center justify-between rounded-xl border px-4 py-3.5 text-left transition-all duration-200 ${
-          formData.deliveryArea === "outside-dhaka"
-            ? "border-gray-900 bg-gray-50"
-            : "border-gray-200 bg-white hover:border-gray-400"
-        } disabled:cursor-not-allowed disabled:opacity-60`}
-      >
-        <div className="flex items-center gap-3">
-          {/* RADIO / CHECK ICON */}
-          <div
-            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all ${
-              formData.deliveryArea === "outside-dhaka"
-                ? "border-gray-900 bg-gray-900 text-white"
-                : "border-gray-300 bg-white"
-            }`}
-          >
-            {formData.deliveryArea === "outside-dhaka" && (
-              <FiCheck size={11} strokeWidth={3} />
-            )}
-          </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">
+                          ঢাকা শহরের ভিতরে
+                        </p>
 
-          <div>
-            <p className="text-sm font-semibold text-gray-900">
-              ঢাকা শহরের বাইরে
-            </p>
+                        <p className="mt-0.5 text-[11px] text-gray-400">
+                          Dhaka City
+                        </p>
+                      </div>
+                    </div>
 
-            <p className="mt-0.5 text-[11px] text-gray-400">
-              Outside Dhaka
-            </p>
-          </div>
-        </div>
+                    <span className="text-sm font-bold text-gray-900">
+                      ৳60
+                    </span>
+                  </button>
 
-        <span className="text-sm font-bold text-gray-900">
-          ৳100
-        </span>
-      </button>
-    </div>
-  </div>
+                  {/* OUTSIDE DHAKA */}
 
-  {/* COD */}
-  <div className="mt-5 rounded-xl border border-gray-900 bg-gray-50 px-4 py-3.5">
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm">
-          💵
-        </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleDeliveryAreaChange(
+                        "outside-dhaka"
+                      )
+                    }
+                    disabled={loading}
+                    aria-pressed={
+                      formData.deliveryArea ===
+                      "outside-dhaka"
+                    }
+                    className={`flex items-center justify-between rounded-xl border px-4 py-3.5 text-left transition-all duration-200 ${
+                      formData.deliveryArea ===
+                      "outside-dhaka"
+                        ? "border-gray-900 bg-gray-50"
+                        : "border-gray-200 bg-white hover:border-gray-400"
+                    } disabled:cursor-not-allowed disabled:opacity-60`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all ${
+                          formData.deliveryArea ===
+                          "outside-dhaka"
+                            ? "border-gray-900 bg-gray-900 text-white"
+                            : "border-gray-300 bg-white"
+                        }`}
+                      >
+                        {formData.deliveryArea ===
+                          "outside-dhaka" && (
+                          <FiCheck
+                            size={11}
+                            strokeWidth={3}
+                          />
+                        )}
+                      </div>
 
-        <div>
-          <p className="text-sm font-semibold text-gray-900">
-            Cash on Delivery
-          </p>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">
+                          ঢাকা শহরের বাইরে
+                        </p>
 
-          <p className="mt-0.5 text-[11px] text-gray-400">
-            Pay when your order arrives.
-          </p>
-        </div>
-      </div>
+                        <p className="mt-0.5 text-[11px] text-gray-400">
+                          Outside Dhaka
+                        </p>
+                      </div>
+                    </div>
 
-      {/* SELECTED */}
-      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-900 text-white">
-        <FiCheck size={11} strokeWidth={3} />
-      </div>
-    </div>
-  </div>
+                    <span className="text-sm font-bold text-gray-900">
+                      ৳100
+                    </span>
+                  </button>
+                </div>
+              </div>
 
-  {/* DELIVERY CHARGE */}
-  <div className="mt-3.5 rounded-xl border border-gray-200 px-4 py-3.5">
-    <div className="flex items-center justify-between gap-4">
-      <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100">
-          🚚
-        </div>
+              {/* COD */}
 
-        <div>
-          <p className="text-sm font-semibold text-gray-900">
-            Delivery Charge
-          </p>
+              <div className="mt-5 rounded-xl border border-gray-900 bg-gray-50 px-4 py-3.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm">
+                      💵
+                    </div>
 
-          <p className="mt-0.5 text-[11px] text-gray-400">
-            {formData.deliveryArea === "inside-dhaka"
-              ? "Dhaka city delivery"
-              : formData.deliveryArea === "outside-dhaka"
-              ? "Outside Dhaka delivery"
-              : "Select your delivery area"}
-          </p>
-        </div>
-      </div>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">
+                        Cash on Delivery
+                      </p>
 
-      <div className="shrink-0 text-right">
-        {formData.deliveryArea ? (
-          <>
-            <p className="text-base font-bold text-gray-900">
-              ৳{deliveryCharge.toLocaleString()}
-            </p>
+                      <p className="mt-0.5 text-[11px] text-gray-400">
+                        Pay when your order arrives.
+                      </p>
+                    </div>
+                  </div>
 
-            <div className="mt-0.5 flex items-center justify-end gap-1">
-              <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-900 text-white">
+                    <FiCheck
+                      size={11}
+                      strokeWidth={3}
+                    />
+                  </div>
+                </div>
+              </div>
 
-              <span className="text-[10px] font-medium text-green-600">
-                Selected
-              </span>
-            </div>
-          </>
-        ) : (
-          <span className="text-xs text-gray-400">—</span>
-        )}
-      </div>
-    </div>
-  </div>
-</section>
+              {/* DELIVERY CHARGE */}
+
+              <div className="mt-3.5 rounded-xl border border-gray-200 px-4 py-3.5">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100">
+                      🚚
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">
+                        Delivery Charge
+                      </p>
+
+                      <p className="mt-0.5 text-[11px] text-gray-400">
+                        {formData.deliveryArea ===
+                        "inside-dhaka"
+                          ? "Dhaka city delivery"
+                          : formData.deliveryArea ===
+                            "outside-dhaka"
+                          ? "Outside Dhaka delivery"
+                          : "Select your delivery area"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="shrink-0 text-right">
+                    {formData.deliveryArea ? (
+                      <>
+                        <p className="text-base font-bold text-gray-900">
+                          ৳
+                          {deliveryCharge.toLocaleString()}
+                        </p>
+
+                        <div className="mt-0.5 flex items-center justify-end gap-1">
+                          <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+
+                          <span className="text-[10px] font-medium text-green-600">
+                            Selected
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <span className="text-xs text-gray-400">
+                        —
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </section>
 
             {/* =================================================
                 TRUST
@@ -1810,243 +1985,338 @@ const Checkout = () => {
           ================================================= */}
 
           <div className="lg:col-span-1">
-  <div className="sticky top-6 overflow-hidden rounded-3xl bg-[#171717] text-white shadow-2xl">
-    {/* HEADER */}
-    <div className="border-b border-white/10 px-5 py-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/70">
-            Your order
-          </p>
+            <div className="sticky top-6 overflow-hidden rounded-3xl bg-[#171717] text-white shadow-2xl">
+              {/* HEADER */}
 
-          <h2 className="mt-1 text-lg font-semibold tracking-tight text-white">
-            Order Summary
-          </h2>
-        </div>
+              <div className="border-b border-white/10 px-5 py-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/70">
+                      Your order
+                    </p>
 
-        <span className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white">
-          {orderItems.length}{" "}
-          {orderItems.length === 1 ? "Item" : "Items"}
-        </span>
-      </div>
-    </div>
+                    <h2 className="mt-1 text-lg font-semibold tracking-tight text-white">
+                      Order Summary
+                    </h2>
+                  </div>
 
-    {/* PRODUCTS */}
-    <div className="space-y-3 px-5 py-4">
-      {orderItems.map((item, index) => (
-        <div
-          key={`${item.productId}-${item.variantId || "default"}-${
-            item.selectedSize || "default"
-          }-${index}`}
-          className="rounded-xl border border-white/10 bg-white/[0.04] p-3"
-        >
-          <div className="flex gap-3">
-            {/* IMAGE */}
-            <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-white">
-              {item.productImage ? (
-                <img
-                  src={item.productImage}
-                  alt={item.productName}
-                  className="h-full w-full object-cover"
-                  onError={(event) => {
-                    event.currentTarget.style.display = "none";
-                  }}
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center text-[10px] text-gray-500">
-                  No Image
+                  <span className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white">
+                    {orderItems.length}{" "}
+                    {orderItems.length ===
+                    1
+                      ? "Item"
+                      : "Items"}
+                  </span>
                 </div>
-              )}
-            </div>
-
-            {/* PRODUCT INFO */}
-            <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-2">
-                <h3 className="line-clamp-2 text-[13px] font-semibold leading-5 text-white">
-                  {item.productName}
-                </h3>
-
-                {/* DELETE */}
-                <button
-                  type="button"
-                  onClick={() => removeItem(index)}
-                  disabled={loading}
-                  className="shrink-0 rounded-md p-1.5 text-white/70 transition hover:bg-red-500/10 hover:text-red-400 disabled:opacity-30"
-                  aria-label="Remove item"
-                >
-                  <FiTrash2 size={13} />
-                </button>
               </div>
 
-              {/* VARIANTS */}
-              {(item.selectedColor || item.selectedSize) && (
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {item.selectedColor && (
-                    <span className="rounded-md bg-white/10 px-2 py-1 text-[10px] text-white">
-                      Color: {item.selectedColor}
-                    </span>
-                  )}
+              {/* PRODUCTS */}
 
-                  {item.selectedSize && (
-                    <span className="rounded-md bg-white/10 px-2 py-1 text-[10px] text-white">
-                      Size: {item.selectedSize}
-                    </span>
-                  )}
-                </div>
-              )}
+              <div className="space-y-3 px-5 py-4">
+                {orderItems.map(
+                  (
+                    item,
+                    index
+                  ) => (
+                    <div
+                      key={`${item.productId}-${
+                        item.variantId ||
+                        "default"
+                      }-${
+                        item.selectedSize ||
+                        "default"
+                      }-${index}`}
+                      className="rounded-xl border border-white/10 bg-white/[0.04] p-3"
+                    >
+                      <div className="flex gap-3">
+                        {/* IMAGE */}
+
+                        <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-white">
+                          {item.productImage ? (
+                            <img
+                              src={
+                                item.productImage
+                              }
+                              alt={
+                                item.productName
+                              }
+                              className="h-full w-full object-cover"
+                              onError={(
+                                event
+                              ) => {
+                                event.currentTarget.style.display =
+                                  "none";
+                              }}
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-[10px] text-gray-500">
+                              No Image
+                            </div>
+                          )}
+                        </div>
+
+                        {/* PRODUCT INFO */}
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <h3 className="line-clamp-2 text-[13px] font-semibold leading-5 text-white">
+                              {
+                                item.productName
+                              }
+                            </h3>
+
+                            {/* DELETE */}
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                removeItem(
+                                  index
+                                )
+                              }
+                              disabled={
+                                loading
+                              }
+                              className="shrink-0 rounded-md p-1.5 text-white/70 transition hover:bg-red-500/10 hover:text-red-400 disabled:opacity-30"
+                              aria-label="Remove item"
+                            >
+                              <FiTrash2
+                                size={
+                                  13
+                                }
+                              />
+                            </button>
+                          </div>
+
+                          {/* VARIANTS */}
+
+                          {(item.selectedColor ||
+                            item.selectedSize) && (
+                            <div className="mt-1.5 flex flex-wrap gap-1.5">
+                              {item.selectedColor && (
+                                <span className="rounded-md bg-white/10 px-2 py-1 text-[10px] text-white">
+                                  Color:{" "}
+                                  {
+                                    item.selectedColor
+                                  }
+                                </span>
+                              )}
+
+                              {item.selectedSize && (
+                                <span className="rounded-md bg-white/10 px-2 py-1 text-[10px] text-white">
+                                  Size:{" "}
+                                  {
+                                    item.selectedSize
+                                  }
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* PRICE */}
+
+                          <div className="mt-2 flex items-center justify-between">
+                            <span className="text-[10px] text-white/70">
+                              ৳
+                              {Number(
+                                item.price
+                              ).toLocaleString()}{" "}
+                              ×{" "}
+                              {
+                                item.quantity
+                              }
+                            </span>
+
+                            <span className="text-xs font-semibold text-white">
+                              ৳
+                              {Number(
+                                item.subtotal
+                              ).toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* QUANTITY */}
+
+                      <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3">
+                        <span className="text-[10px] text-white/70">
+                          Quantity
+                        </span>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              decreaseQuantity(
+                                index
+                              )
+                            }
+                            disabled={
+                              loading ||
+                              item.quantity <=
+                                1
+                            }
+                            className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-30"
+                          >
+                            <FiMinus
+                              size={12}
+                            />
+                          </button>
+
+                          <span className="min-w-[24px] text-center text-xs font-semibold text-white">
+                            {
+                              item.quantity
+                            }
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              increaseQuantity(
+                                index
+                              )
+                            }
+                            disabled={
+                              loading
+                            }
+                            className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 text-white transition hover:bg-white/20 disabled:opacity-30"
+                          >
+                            <FiPlus
+                              size={12}
+                            />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                )}
+              </div>
 
               {/* PRICE */}
-              <div className="mt-2 flex items-center justify-between">
-                <span className="text-[10px] text-white/70">
-                  ৳{Number(item.price).toLocaleString()} ×{" "}
-                  {item.quantity}
-                </span>
 
-                <span className="text-xs font-semibold text-white">
-                  ৳{Number(item.subtotal).toLocaleString()}
-                </span>
+              <div className="border-t border-white/10 px-5 py-4">
+                <div className="space-y-2.5">
+                  {/* SUBTOTAL */}
+
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-white/70">
+                      Subtotal
+                    </span>
+
+                    <span className="font-medium text-white">
+                      ৳
+                      {subtotal.toLocaleString()}
+                    </span>
+                  </div>
+
+                  {/* DELIVERY */}
+
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-white/70">
+                      Delivery Charge
+                    </span>
+
+                    <span className="font-medium text-white">
+                      {formData.deliveryArea ? (
+                        <>
+                          ৳
+                          {deliveryCharge.toLocaleString()}
+                        </>
+                      ) : (
+                        <span className="text-[10px] text-white/70">
+                          Select delivery area
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                {/* TOTAL */}
+
+                <div className="mt-4 border-t border-white/10 pt-4">
+                  <div className="flex items-end justify-between">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.16em] text-white/70">
+                        Total
+                      </p>
+
+                      <p className="mt-1 text-2xl font-bold tracking-tight text-white">
+                        ৳
+                        {total.toLocaleString()}
+                      </p>
+                    </div>
+
+                    <span className="mb-1 rounded-full bg-emerald-400/10 px-2.5 py-1 text-[15px] font-semibold text-green-400">
+                      COD
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* PAYMENT INFO */}
+
+              <div className="mx-5 mb-4 rounded-xl border border-white/10 bg-white/[0.04] p-3.5">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10">
+                    💵
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-semibold text-white">
+                      Cash on Delivery
+                    </p>
+
+                    <p className="mt-1 text-[10px] text-white/70">
+                      Pay securely when your order arrives
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* CONFIRM */}
+
+              <div className="px-5 pb-5">
+                <button
+                  type="submit"
+                  disabled={
+                    loading ||
+                    !orderItems.length
+                  }
+                  className="cursor-pointer group flex w-full items-center justify-center gap-2.5 rounded-xl bg-white px-4 py-3.5 text-xs font-bold text-black shadow-lg transition-all duration-200 hover:bg-gray-100 hover:shadow-xl active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {loading ? (
+                    <>
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-black" />
+
+                      <span>
+                        Placing Order...
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <FiCheck
+                        size={16}
+                        className="transition-transform group-hover:scale-110"
+                      />
+
+                      <span>
+                        Confirm Order
+                      </span>
+                    </>
+                  )}
+                </button>
+
+                <div className="mt-2.5 flex items-center justify-center gap-1.5 text-[9px] text-white/70">
+                  <FiLock size={10} />
+
+                  <span>
+                    Secure & encrypted checkout
+                  </span>
+                </div>
               </div>
             </div>
           </div>
-
-          {/* QUANTITY */}
-          <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3">
-            <span className="text-[10px] text-white/70">
-              Quantity
-            </span>
-
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => decreaseQuantity(index)}
-                disabled={loading || item.quantity <= 1}
-                className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-30"
-              >
-                <FiMinus size={12} />
-              </button>
-
-              <span className="min-w-[24px] text-center text-xs font-semibold text-white">
-                {item.quantity}
-              </span>
-
-              <button
-                type="button"
-                onClick={() => increaseQuantity(index)}
-                disabled={loading}
-                className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 text-white transition hover:bg-white/20 disabled:opacity-30"
-              >
-                <FiPlus size={12} />
-              </button>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-
-    {/* PRICE */}
-    <div className="border-t border-white/10 px-5 py-4">
-      <div className="space-y-2.5">
-        {/* SUBTOTAL */}
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-white/70">
-            Subtotal
-          </span>
-
-          <span className="font-medium text-white">
-            ৳{subtotal.toLocaleString()}
-          </span>
-        </div>
-
-        {/* DELIVERY */}
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-white/70">
-            Delivery Charge
-          </span>
-
-          <span className="font-medium text-white">
-            {formData.deliveryArea ? (
-              <>৳{deliveryCharge.toLocaleString()}</>
-            ) : (
-              <span className="text-[10px] text-white/70">
-                Select delivery area
-              </span>
-            )}
-          </span>
-        </div>
-      </div>
-
-      {/* TOTAL */}
-      <div className="mt-4 border-t border-white/10 pt-4">
-        <div className="flex items-end justify-between">
-          <div>
-            <p className="text-[10px] uppercase tracking-[0.16em] text-white/70">
-              Total
-            </p>
-
-            <p className="mt-1 text-2xl font-bold tracking-tight text-white">
-              ৳{total.toLocaleString()}
-            </p>
-          </div>
-
-          <span className="mb-1 rounded-full bg-emerald-400/10 px-2.5 py-1 text-[15px] font-semibold text-green-400">
-            COD
-          </span>
-        </div>
-      </div>
-    </div>
-
-    {/* PAYMENT INFO */}
-    <div className="mx-5 mb-4 rounded-xl border border-white/10 bg-white/[0.04] p-3.5">
-      <div className="flex items-center gap-3">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10">
-          💵
-        </div>
-
-        <div>
-          <p className="text-xs font-semibold text-white">
-            Cash on Delivery
-          </p>
-
-          <p className="mt-1 text-[10px] text-white/70">
-            Pay securely when your order arrives
-          </p>
-        </div>
-      </div>
-    </div>
-
-    {/* CONFIRM */}
-    <div className="px-5 pb-5">
-      <button
-        type="submit"
-        disabled={loading || !orderItems.length}
-        className="cursor-pointer group flex w-full items-center justify-center gap-2.5 rounded-xl bg-white px-4 py-3.5 text-xs font-bold text-black shadow-lg transition-all duration-200 hover:bg-gray-100 hover:shadow-xl active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {loading ? (
-          <>
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-black" />
-
-            <span>Placing Order...</span>
-          </>
-        ) : (
-          <>
-            <FiCheck
-              size={16}
-              className="transition-transform group-hover:scale-110"
-            />
-
-            <span className="">Confirm Order</span>
-          </>
-        )}
-      </button>
-
-      <div className="mt-2.5 flex items-center justify-center gap-1.5 text-[9px] text-white/70">
-        <FiLock size={10} />
-
-        <span>Secure & encrypted checkout</span>
-      </div>
-    </div>
-  </div>
-</div>
         </form>
       </div>
 

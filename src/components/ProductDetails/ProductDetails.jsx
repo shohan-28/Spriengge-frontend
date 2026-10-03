@@ -1,10 +1,16 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 
 import { ArrowRight } from "lucide-react";
 import { FaFacebookF } from "react-icons/fa";
+
 import {
   FiHeart,
   FiMinus,
@@ -23,10 +29,12 @@ import {
   FiHome,
   FiTag,
   FiBox,
-  
 } from "react-icons/fi";
 
-import { IoStar, IoStarOutline } from "react-icons/io5";
+import {
+  IoStar,
+  IoStarOutline,
+} from "react-icons/io5";
 
 import { fetchProduct } from "../Feature/ProductSlice";
 import { addToCart } from "../Feature/CartSlice";
@@ -37,22 +45,91 @@ const ProductDetails = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  const productState = useSelector((state) => state.product);
+  const productState = useSelector(
+    (state) => state.product
+  );
 
-  const products = Array.isArray(productState?.product)
+  const products = Array.isArray(
+    productState?.product
+  )
     ? productState.product
     : [];
 
-  const loading = productState?.loading || false;
-  const error = productState?.error || null;
+  const loading =
+    productState?.loading || false;
 
-  const [selectedVariant, setSelectedVariant] = useState(null);
-  const [selectedColor, setSelectedColor] = useState("");
-  const [selectedSize, setSelectedSize] = useState("");
-  const [selectedImage, setSelectedImage] = useState("");
-  const [quantity, setQuantity] = useState(1);
-  const [wishlist, setWishlist] = useState(false);
-  const [openSection, setOpenSection] = useState(null);
+  const error =
+    productState?.error || null;
+
+  const [
+    selectedVariant,
+    setSelectedVariant,
+  ] = useState(null);
+
+  const [
+    selectedColor,
+    setSelectedColor,
+  ] = useState("");
+
+  const [
+    selectedSize,
+    setSelectedSize,
+  ] = useState("");
+
+  const [
+    selectedImage,
+    setSelectedImage,
+  ] = useState("");
+
+  const [
+    quantity,
+    setQuantity,
+  ] = useState(1);
+
+  const [
+    wishlist,
+    setWishlist,
+  ] = useState(false);
+
+  const [
+    openSection,
+    setOpenSection,
+  ] = useState(null);
+
+  /*
+  ============================================================
+  META PIXEL TRACKING
+  ============================================================
+  */
+
+  const trackMetaEvent = (
+    eventName,
+    params = {},
+    options = {}
+  ) => {
+    if (
+      typeof window === "undefined" ||
+      typeof window.fbq !== "function"
+    ) {
+      return;
+    }
+
+    window.fbq(
+      "track",
+      eventName,
+      params,
+      options
+    );
+  };
+
+  /*
+  Prevent duplicate ViewContent
+  for the same product during the
+  current component lifecycle.
+  */
+
+  const trackedViewContentRef =
+    useRef(null);
 
   /*
   ============================================================
@@ -61,14 +138,21 @@ const ProductDetails = () => {
   */
 
   const cleanString = (value) => {
-    if (value === null || value === undefined) return "";
+    if (
+      value === null ||
+      value === undefined
+    ) {
+      return "";
+    }
+
     return String(value).trim();
   };
 
   const normalizeProductId = (value) => {
     const numberValue = Number(value);
 
-    return Number.isFinite(numberValue) && numberValue > 0
+    return Number.isFinite(numberValue) &&
+      numberValue > 0
       ? numberValue
       : null;
   };
@@ -91,7 +175,10 @@ const ProductDetails = () => {
     if (products.length === 0) {
       dispatch(fetchProduct());
     }
-  }, [dispatch, products.length]);
+  }, [
+    dispatch,
+    products.length,
+  ]);
 
   /*
   ============================================================
@@ -99,19 +186,78 @@ const ProductDetails = () => {
   ============================================================
   */
 
-  const numericRouteProductId = normalizeProductId(productId);
+  const numericRouteProductId =
+    normalizeProductId(productId);
 
   const product = useMemo(() => {
-    if (!numericRouteProductId) return null;
+    if (!numericRouteProductId) {
+      return null;
+    }
 
     return products.find((item) => {
-      const currentProductId = normalizeProductId(
-        item?.productId
-      );
+      const currentProductId =
+        normalizeProductId(
+          item?.productId
+        );
 
-      return currentProductId === numericRouteProductId;
+      return (
+        currentProductId ===
+        numericRouteProductId
+      );
     });
-  }, [products, numericRouteProductId]);
+  }, [
+    products,
+    numericRouteProductId,
+  ]);
+
+  /*
+  ============================================================
+  META PIXEL - VIEW CONTENT
+  ============================================================
+  */
+
+  useEffect(() => {
+    if (!product?.productId) {
+      return;
+    }
+
+    const currentProductId =
+      String(product.productId);
+
+    /*
+    Prevent duplicate ViewContent
+    for the same product.
+    */
+
+    if (
+      trackedViewContentRef.current ===
+      currentProductId
+    ) {
+      return;
+    }
+
+    trackedViewContentRef.current =
+      currentProductId;
+
+    trackMetaEvent("ViewContent", {
+      content_ids: [
+        currentProductId,
+      ],
+
+      content_type: "product",
+
+      content_name:
+        cleanString(
+          product?.name
+        ) || "Product",
+
+      value: Number(
+        product?.price || 0
+      ),
+
+      currency: "BDT",
+    });
+  }, [product]);
 
   /*
   ============================================================
@@ -142,7 +288,9 @@ const ProductDetails = () => {
   */
 
   const variants = useMemo(() => {
-    if (!product) return [];
+    if (!product) {
+      return [];
+    }
 
     if (
       Array.isArray(product.variants) &&
@@ -150,9 +298,10 @@ const ProductDetails = () => {
     ) {
       return product.variants
         .map((variant) => {
-          const variantId = normalizeVariantId(
-            variant?.variantId
-          );
+          const variantId =
+            normalizeVariantId(
+              variant?.variantId
+            );
 
           if (!variantId) {
             return null;
@@ -163,13 +312,20 @@ const ProductDetails = () => {
 
             variantId,
 
-            color: cleanString(variant?.color) || "Default",
+            color:
+              cleanString(
+                variant?.color
+              ) || "Default",
 
             colorCode:
-              cleanString(variant?.colorCode) || "#e5e7eb",
+              cleanString(
+                variant?.colorCode
+              ) || "#e5e7eb",
 
             price: Number(
-              variant?.price ?? product?.price ?? 0
+              variant?.price ??
+                product?.price ??
+                0
             ),
 
             oldPrice: Number(
@@ -184,21 +340,33 @@ const ProductDetails = () => {
                 0
             ),
 
-            images: Array.isArray(variant?.images)
+            images: Array.isArray(
+              variant?.images
+            )
               ? variant.images.filter(
                   (image) =>
-                    typeof image === "string" &&
+                    typeof image ===
+                      "string" &&
                     image.trim() !== ""
                 )
               : [],
 
-            sizes: Array.isArray(variant?.sizes)
+            sizes: Array.isArray(
+              variant?.sizes
+            )
               ? variant.sizes
                   .map((size) => ({
-                    size: cleanString(size?.size),
-                    stock: Number(size?.stock || 0),
+                    size: cleanString(
+                      size?.size
+                    ),
+                    stock: Number(
+                      size?.stock || 0
+                    ),
                   }))
-                  .filter((size) => size.size !== "")
+                  .filter(
+                    (size) =>
+                      size.size !== ""
+                  )
               : [],
           };
         })
@@ -225,14 +393,22 @@ const ProductDetails = () => {
 
         colorCode: "#e5e7eb",
 
-        price: Number(product?.price || 0),
+        price: Number(
+          product?.price || 0
+        ),
 
-        oldPrice: Number(product?.oldPrice || 0),
+        oldPrice: Number(
+          product?.oldPrice || 0
+        ),
 
-        stock: Number(product?.stock || 0),
+        stock: Number(
+          product?.stock || 0
+        ),
 
         images:
-          Array.isArray(product?.images) &&
+          Array.isArray(
+            product?.images
+          ) &&
           product.images.length > 0
             ? product.images.filter(Boolean)
             : product?.image
@@ -251,12 +427,16 @@ const ProductDetails = () => {
   */
 
   useEffect(() => {
-    if (!product || variants.length === 0) {
+    if (
+      !product ||
+      variants.length === 0
+    ) {
       setSelectedVariant(null);
       setSelectedColor("");
       setSelectedSize("");
       setSelectedImage("");
       setQuantity(1);
+
       return;
     }
 
@@ -268,22 +448,34 @@ const ProductDetails = () => {
     const firstAvailableVariant =
       variants.find((variant) => {
         const hasSizes =
-          Array.isArray(variant?.sizes) &&
+          Array.isArray(
+            variant?.sizes
+          ) &&
           variant.sizes.length > 0;
 
         if (hasSizes) {
           return variant.sizes.some(
-            (size) => Number(size?.stock || 0) > 0
+            (size) =>
+              Number(
+                size?.stock || 0
+              ) > 0
           );
         }
 
-        return Number(variant?.stock || 0) > 0;
+        return (
+          Number(
+            variant?.stock || 0
+          ) > 0
+        );
       }) || variants[0];
 
-    setSelectedVariant(firstAvailableVariant);
+    setSelectedVariant(
+      firstAvailableVariant
+    );
 
     setSelectedColor(
-      firstAvailableVariant?.color || ""
+      firstAvailableVariant?.color ||
+        ""
     );
 
     /*
@@ -293,17 +485,24 @@ const ProductDetails = () => {
     */
 
     const variantImages =
-      Array.isArray(firstAvailableVariant?.images) &&
-      firstAvailableVariant.images.length > 0
+      Array.isArray(
+        firstAvailableVariant?.images
+      ) &&
+      firstAvailableVariant.images
+        .length > 0
         ? firstAvailableVariant.images
-        : Array.isArray(product?.images) &&
+        : Array.isArray(
+            product?.images
+          ) &&
           product.images.length > 0
         ? product.images
         : product?.image
         ? [product.image]
         : [];
 
-    setSelectedImage(variantImages[0] || "");
+    setSelectedImage(
+      variantImages[0] || ""
+    );
 
     /*
     ------------------------------------------------------------
@@ -312,18 +511,27 @@ const ProductDetails = () => {
     */
 
     const firstAvailableSize =
-      Array.isArray(firstAvailableVariant?.sizes)
+      Array.isArray(
+        firstAvailableVariant?.sizes
+      )
         ? firstAvailableVariant.sizes.find(
-            (size) => Number(size?.stock || 0) > 0
+            (size) =>
+              Number(
+                size?.stock || 0
+              ) > 0
           )
         : null;
 
     setSelectedSize(
-      firstAvailableSize?.size || ""
+      firstAvailableSize?.size ||
+        ""
     );
 
     setQuantity(1);
-  }, [product, variants]);
+  }, [
+    product,
+    variants,
+  ]);
 
   /*
   ============================================================
@@ -332,25 +540,41 @@ const ProductDetails = () => {
   */
 
   const currentStock = useMemo(() => {
-    if (!selectedVariant) return 0;
+    if (!selectedVariant) {
+      return 0;
+    }
 
     const hasSizes =
-      Array.isArray(selectedVariant?.sizes) &&
-      selectedVariant.sizes.length > 0;
+      Array.isArray(
+        selectedVariant?.sizes
+      ) &&
+      selectedVariant.sizes.length >
+        0;
 
     if (hasSizes) {
       const currentSize =
         selectedVariant.sizes.find(
           (size) =>
-            normalizeSize(size?.size) ===
-            normalizeSize(selectedSize)
+            normalizeSize(
+              size?.size
+            ) ===
+            normalizeSize(
+              selectedSize
+            )
         );
 
-      return Number(currentSize?.stock || 0);
+      return Number(
+        currentSize?.stock || 0
+      );
     }
 
-    return Number(selectedVariant?.stock || 0);
-  }, [selectedVariant, selectedSize]);
+    return Number(
+      selectedVariant?.stock || 0
+    );
+  }, [
+    selectedVariant,
+    selectedSize,
+  ]);
 
   /*
   ============================================================
@@ -379,11 +603,14 @@ const ProductDetails = () => {
   const discountPercentage =
     currentOldPrice > currentPrice
       ? Math.round(
-          ((currentOldPrice - currentPrice) /
+          ((currentOldPrice -
+            currentPrice) /
             currentOldPrice) *
             100
         )
-      : Number(product?.discount || 0);
+      : Number(
+          product?.discount || 0
+        );
 
   /*
   ============================================================
@@ -392,16 +619,21 @@ const ProductDetails = () => {
   */
 
   const productImages = useMemo(() => {
-    if (!product) return [];
+    if (!product) {
+      return [];
+    }
 
-    const variantImages = Array.isArray(
-      selectedVariant?.images
-    )
-      ? selectedVariant.images
-      : [];
+    const variantImages =
+      Array.isArray(
+        selectedVariant?.images
+      )
+        ? selectedVariant.images
+        : [];
 
     const mainImages =
-      Array.isArray(product?.images) &&
+      Array.isArray(
+        product?.images
+      ) &&
       product.images.length > 0
         ? product.images
         : product?.image
@@ -409,20 +641,24 @@ const ProductDetails = () => {
         : [];
 
     const images = [
-  ...mainImages,
-  ...variantImages,
-];
+      ...mainImages,
+      ...variantImages,
+    ];
 
     return [
       ...new Set(
         images.filter(
           (image) =>
-            typeof image === "string" &&
+            typeof image ===
+              "string" &&
             image.trim() !== ""
         )
       ),
     ];
-  }, [product, selectedVariant]);
+  }, [
+    product,
+    selectedVariant,
+  ]);
 
   /*
   ============================================================
@@ -430,10 +666,16 @@ const ProductDetails = () => {
   ============================================================
   */
 
-  const handleColorChange = (variant) => {
-    if (!variant) return;
+  const handleColorChange = (
+    variant
+  ) => {
+    if (!variant) {
+      return;
+    }
 
-    setSelectedVariant(variant);
+    setSelectedVariant(
+      variant
+    );
 
     setSelectedColor(
       variant?.color || ""
@@ -446,17 +688,23 @@ const ProductDetails = () => {
     */
 
     const images =
-      Array.isArray(variant?.images) &&
+      Array.isArray(
+        variant?.images
+      ) &&
       variant.images.length > 0
         ? variant.images
-        : Array.isArray(product?.images) &&
+        : Array.isArray(
+            product?.images
+          ) &&
           product.images.length > 0
         ? product.images
         : product?.image
         ? [product.image]
         : [];
 
-    setSelectedImage(images[0] || "");
+    setSelectedImage(
+      images[0] || ""
+    );
 
     /*
     ------------------------------------------------------------
@@ -465,15 +713,20 @@ const ProductDetails = () => {
     */
 
     const firstAvailableSize =
-      Array.isArray(variant?.sizes)
+      Array.isArray(
+        variant?.sizes
+      )
         ? variant.sizes.find(
             (size) =>
-              Number(size?.stock || 0) > 0
+              Number(
+                size?.stock || 0
+              ) > 0
           )
         : null;
 
     setSelectedSize(
-      firstAvailableSize?.size || ""
+      firstAvailableSize?.size ||
+        ""
     );
 
     setQuantity(1);
@@ -485,15 +738,25 @@ const ProductDetails = () => {
   ============================================================
   */
 
-  const handleSizeChange = (size) => {
-    if (!size) return;
+  const handleSizeChange = (
+    size
+  ) => {
+    if (!size) {
+      return;
+    }
 
-    if (Number(size?.stock || 0) <= 0) {
+    if (
+      Number(
+        size?.stock || 0
+      ) <= 0
+    ) {
       return;
     }
 
     setSelectedSize(
-      cleanString(size?.size)
+      cleanString(
+        size?.size
+      )
     );
 
     setQuantity(1);
@@ -510,13 +773,17 @@ const ProductDetails = () => {
       currentStock > 0 &&
       quantity < currentStock
     ) {
-      setQuantity((prev) => prev + 1);
+      setQuantity(
+        (prev) => prev + 1
+      );
     }
   };
 
   const decreaseQuantity = () => {
     if (quantity > 1) {
-      setQuantity((prev) => prev - 1);
+      setQuantity(
+        (prev) => prev - 1
+      );
     }
   };
 
@@ -536,7 +803,9 @@ const ProductDetails = () => {
   */
 
   const checkoutProduct = useMemo(() => {
-    if (!product) return null;
+    if (!product) {
+      return null;
+    }
 
     const numericProductId =
       normalizeProductId(
@@ -564,10 +833,15 @@ const ProductDetails = () => {
       "";
 
     const currentImages =
-      Array.isArray(selectedVariant?.images) &&
-      selectedVariant.images.length > 0
+      Array.isArray(
+        selectedVariant?.images
+      ) &&
+      selectedVariant.images.length >
+        0
         ? selectedVariant.images
-        : Array.isArray(product?.images)
+        : Array.isArray(
+            product?.images
+          )
         ? product.images
         : currentImage
         ? [currentImage]
@@ -579,31 +853,39 @@ const ProductDetails = () => {
       /*
       Canonical product identity
       */
-      productId: numericProductId,
+
+      productId:
+        numericProductId,
 
       /*
       Legacy frontend compatibility only.
       Backend should use productId.
       */
+
       id: numericProductId,
 
       /*
       Canonical variant identity
       */
-      variantId: currentVariantId,
+
+      variantId:
+        currentVariantId,
 
       selectedColor:
-        selectedVariant?.color || "",
+        selectedVariant?.color ||
+        "",
 
       selectedColorCode:
-        selectedVariant?.colorCode || "",
+        selectedVariant?.colorCode ||
+        "",
 
       selectedSize:
         selectedSize || "",
 
       price: currentPrice,
 
-      oldPrice: currentOldPrice,
+      oldPrice:
+        currentOldPrice,
 
       image: currentImage,
 
@@ -632,7 +914,10 @@ const ProductDetails = () => {
 
   const validateSelection = () => {
     if (!product) {
-      alert("Product পাওয়া যায়নি।");
+      alert(
+        "Product পাওয়া যায়নি।"
+      );
+
       return false;
     }
 
@@ -642,21 +927,36 @@ const ProductDetails = () => {
       );
 
     if (!numericProductId) {
-      alert("Product ID invalid.");
+      alert(
+        "Product ID invalid."
+      );
+
       return false;
     }
 
     if (!selectedVariant) {
-      alert("দয়া করে একটি color select করুন।");
+      alert(
+        "দয়া করে একটি color select করুন।"
+      );
+
       return false;
     }
 
     const hasSizes =
-      Array.isArray(selectedVariant?.sizes) &&
-      selectedVariant.sizes.length > 0;
+      Array.isArray(
+        selectedVariant?.sizes
+      ) &&
+      selectedVariant.sizes.length >
+        0;
 
-    if (hasSizes && !selectedSize) {
-      alert("দয়া করে একটি size select করুন।");
+    if (
+      hasSizes &&
+      !selectedSize
+    ) {
+      alert(
+        "দয়া করে একটি size select করুন।"
+      );
+
       return false;
     }
 
@@ -664,37 +964,64 @@ const ProductDetails = () => {
       const selectedSizeData =
         selectedVariant.sizes.find(
           (size) =>
-            normalizeSize(size?.size) ===
-            normalizeSize(selectedSize)
+            normalizeSize(
+              size?.size
+            ) ===
+            normalizeSize(
+              selectedSize
+            )
         );
 
       if (!selectedSizeData) {
-        alert("Selected size পাওয়া যায়নি।");
+        alert(
+          "Selected size পাওয়া যায়নি।"
+        );
+
         return false;
       }
 
       if (
-        Number(selectedSizeData.stock || 0) <= 0
+        Number(
+          selectedSizeData.stock ||
+            0
+        ) <= 0
       ) {
-        alert("এই size বর্তমানে stock out.");
+        alert(
+          "এই size বর্তমানে stock out."
+        );
+
         return false;
       }
     } else {
-      if (Number(selectedVariant?.stock || 0) <= 0) {
-        alert("এই product বর্তমানে stock out.");
+      if (
+        Number(
+          selectedVariant?.stock ||
+            0
+        ) <= 0
+      ) {
+        alert(
+          "এই product বর্তমানে stock out."
+        );
+
         return false;
       }
     }
 
     if (currentStock <= 0) {
-      alert("এই product বর্তমানে stock out.");
+      alert(
+        "এই product বর্তমানে stock out."
+      );
+
       return false;
     }
 
-    if (quantity > currentStock) {
+    if (
+      quantity > currentStock
+    ) {
       alert(
         `Maximum ${currentStock} টি product available.`
       );
+
       return false;
     }
 
@@ -708,14 +1035,66 @@ const ProductDetails = () => {
   */
 
   const handleAddToCart = () => {
-    if (!validateSelection()) return;
-
-    if (!checkoutProduct) {
-      alert("Product data invalid.");
+    if (!validateSelection()) {
       return;
     }
 
-    dispatch(addToCart(checkoutProduct));
+    if (!checkoutProduct) {
+      alert(
+        "Product data invalid."
+      );
+
+      return;
+    }
+
+    /*
+    ------------------------------------------------------------
+    EXISTING REDUX CART LOGIC
+    ------------------------------------------------------------
+    */
+
+    dispatch(
+      addToCart(checkoutProduct)
+    );
+
+    /*
+    ------------------------------------------------------------
+    META PIXEL - ADD TO CART
+    ------------------------------------------------------------
+    */
+
+    trackMetaEvent(
+      "AddToCart",
+      {
+        content_ids: [
+          String(
+            checkoutProduct.productId
+          ),
+        ],
+
+        content_type: "product",
+
+        content_name:
+          cleanString(
+            checkoutProduct?.name
+          ) || "Product",
+
+        value:
+          Number(
+            checkoutProduct?.price ||
+              0
+          ) *
+          Number(
+            quantity || 1
+          ),
+
+        currency: "BDT",
+
+        num_items: Number(
+          quantity || 1
+        ),
+      }
+    );
   };
 
   /*
@@ -725,16 +1104,70 @@ const ProductDetails = () => {
   */
 
   const handleBuyNow = () => {
-    if (!validateSelection()) return;
-
-    if (!checkoutProduct) {
-      alert("Product data invalid.");
+    if (!validateSelection()) {
       return;
     }
 
+    if (!checkoutProduct) {
+      alert(
+        "Product data invalid."
+      );
+
+      return;
+    }
+
+    /*
+    ------------------------------------------------------------
+    META PIXEL - INITIATE CHECKOUT
+    ------------------------------------------------------------
+
+    User has intentionally chosen
+    to continue toward checkout.
+    */
+
+    trackMetaEvent(
+      "InitiateCheckout",
+      {
+        content_ids: [
+          String(
+            checkoutProduct.productId
+          ),
+        ],
+
+        content_type: "product",
+
+        content_name:
+          cleanString(
+            checkoutProduct?.name
+          ) || "Product",
+
+        value:
+          Number(
+            checkoutProduct?.price ||
+              0
+          ) *
+          Number(
+            quantity || 1
+          ),
+
+        currency: "BDT",
+
+        num_items: Number(
+          quantity || 1
+        ),
+      }
+    );
+
+    /*
+    ------------------------------------------------------------
+    EXISTING NAVIGATION
+    ------------------------------------------------------------
+    */
+
     navigate("/Checkout", {
       state: {
-        product: checkoutProduct,
+        product:
+          checkoutProduct,
 
         quantity,
 
@@ -742,7 +1175,8 @@ const ProductDetails = () => {
           checkoutProduct.productId,
 
         variantId:
-          checkoutProduct.variantId || "",
+          checkoutProduct.variantId ||
+          "",
       },
     });
   };
@@ -753,9 +1187,14 @@ const ProductDetails = () => {
   ============================================================
   */
 
-  const toggleSection = (section) => {
-    setOpenSection((prev) =>
-      prev === section ? null : section
+  const toggleSection = (
+    section
+  ) => {
+    setOpenSection(
+      (prev) =>
+        prev === section
+          ? null
+          : section
     );
   };
 
@@ -774,19 +1213,25 @@ const ProductDetails = () => {
     : "Product Details | Spriengge";
 
   const seoDescription =
-    product?.details?.shortDescription ||
+    product?.details
+      ?.shortDescription ||
     product?.description ||
     `Buy ${
-      product?.name || "quality products"
+      product?.name ||
+      "quality products"
     } online from Spriengge. Check product price, features, specifications, colors, sizes and delivery information.`;
 
   const seoKeywords = [
     product?.name,
     product?.brand,
     product?.category,
-    ...(Array.isArray(product?.tags)
+
+    ...(Array.isArray(
+      product?.tags
+    )
       ? product.tags
       : []),
+
     "online shopping Bangladesh",
     "buy online Bangladesh",
     "Spriengge",
@@ -801,7 +1246,8 @@ const ProductDetails = () => {
   */
 
   const canonicalUrl =
-    typeof window !== "undefined"
+    typeof window !==
+    "undefined"
       ? `${window.location.origin}/ProductDetails/${productId}`
       : "";
 
@@ -822,68 +1268,85 @@ const ProductDetails = () => {
   ============================================================
   */
 
-  const productSchema = product
-    ? {
-        "@context": "https://schema.org",
+  const productSchema =
+    product
+      ? {
+          "@context":
+            "https://schema.org",
 
-        "@type": "Product",
+          "@type":
+            "Product",
 
-        name: product.name,
-
-        description: seoDescription,
-
-        image: productImages,
-
-        sku: String(
-          product?.productId || ""
-        ),
-
-        category:
-          product.category || undefined,
-
-        brand: {
-          "@type": "Brand",
           name:
-            product.brand || "Spriengge",
-        },
+            product.name,
 
-        ...(product.rating &&
-        Number(product.reviews || 0) > 0
-          ? {
-              aggregateRating: {
-                "@type":
-                  "AggregateRating",
+          description:
+            seoDescription,
 
-                ratingValue: Number(
-                  product.rating
-                ),
+          image:
+            productImages,
 
-                reviewCount: Number(
-                  product.reviews
-                ),
-              },
-            }
-          : {}),
+          sku: String(
+            product?.productId ||
+              ""
+          ),
 
-        offers: {
-          "@type": "Offer",
+          category:
+            product.category ||
+            undefined,
 
-          url: canonicalUrl,
+          brand: {
+            "@type": "Brand",
 
-          priceCurrency: "BDT",
+            name:
+              product.brand ||
+              "Spriengge",
+          },
 
-          price: currentPrice,
+          ...(product.rating &&
+          Number(
+            product.reviews || 0
+          ) > 0
+            ? {
+                aggregateRating: {
+                  "@type":
+                    "AggregateRating",
 
-          availability:
-            currentStock > 0
-              ? "https://schema.org/InStock"
-              : "https://schema.org/OutOfStock",
+                  ratingValue:
+                    Number(
+                      product.rating
+                    ),
 
-          itemCondition:
-            "https://schema.org/NewCondition",
-        },
-      }
-    : null;
+                  reviewCount:
+                    Number(
+                      product.reviews
+                    ),
+                },
+              }
+            : {}),
+
+          offers: {
+            "@type": "Offer",
+
+            url:
+              canonicalUrl,
+
+            priceCurrency:
+              "BDT",
+
+            price:
+              currentPrice,
+
+            availability:
+              currentStock > 0
+                ? "https://schema.org/InStock"
+                : "https://schema.org/OutOfStock",
+
+            itemCondition:
+              "https://schema.org/NewCondition",
+          },
+        }
+      : null;
 
   /*
   ============================================================
@@ -891,7 +1354,10 @@ const ProductDetails = () => {
   ============================================================
   */
 
-  if (loading && !product) {
+  if (
+    loading &&
+    !product
+  ) {
     return (
       <main className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
         <div className="text-center">
@@ -915,7 +1381,10 @@ const ProductDetails = () => {
   ============================================================
   */
 
-  if (error && !product) {
+  if (
+    error &&
+    !product
+  ) {
     return (
       <main className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
         <div className="text-center max-w-md">
@@ -932,7 +1401,9 @@ const ProductDetails = () => {
           <button
             type="button"
             onClick={() =>
-              dispatch(fetchProduct())
+              dispatch(
+                fetchProduct()
+              )
             }
             className="bg-black text-white px-6 py-3 rounded-xl font-semibold hover:bg-gray-800 transition"
           >
@@ -1004,11 +1475,16 @@ const ProductDetails = () => {
       ====================================================== */}
 
       <Helmet>
-        <title>{seoTitle}</title>
+        <title>
+          {seoTitle}
+        </title>
 
         <meta
           name="description"
-          content={seoDescription.slice(0, 160)}
+          content={seoDescription.slice(
+            0,
+            160
+          )}
         />
 
         <meta
@@ -1100,6 +1576,7 @@ const ProductDetails = () => {
       ====================================================== */}
 
       <main className="min-h-screen bg-transparent text-gray-900">
+
         {/* ====================================================
             BREADCRUMB
         ==================================================== */}
@@ -1140,15 +1617,22 @@ const ProductDetails = () => {
 
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16">
+
             {/* =================================================
                 IMAGE GALLERY
             ================================================= */}
 
             <div>
               <div className="relative bg-gray-50 rounded-3xl overflow-hidden aspect-square">
-                {discountPercentage > 0 && (
+
+                {discountPercentage >
+                  0 && (
                   <div className="absolute top-5 left-5 z-10 bg-black text-white text-xs sm:text-sm font-bold px-4 py-2 rounded-full">
-                    -{discountPercentage}% OFF
+                    -
+                    {
+                      discountPercentage
+                    }
+                    % OFF
                   </div>
                 )}
 
@@ -1168,16 +1652,22 @@ const ProductDetails = () => {
                       ? ` - ${selectedVariant.color}`
                       : ""
                   }`}
-                  title={product.name}
+                  title={
+                    product.name
+                  }
                   loading="eager"
                   className="w-full h-full object-contain p-6 sm:p-10"
                 />
               </div>
 
-              {productImages.length > 1 && (
+              {productImages.length >
+                1 && (
                 <div className="flex gap-3 mt-4 overflow-x-auto pb-2">
                   {productImages.map(
-                    (image, index) => (
+                    (
+                      image,
+                      index
+                    ) => (
                       <button
                         key={`${image}-${index}`}
                         type="button"
@@ -1190,7 +1680,8 @@ const ProductDetails = () => {
                           index + 1
                         }`}
                         className={`flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-xl border-2 overflow-hidden bg-gray-50 transition cursor-pointer ${
-                          selectedImage === image
+                          selectedImage ===
+                          image
                             ? "border-black shadow-md"
                             : "border-gray-200 hover:border-gray-400"
                         }`}
@@ -1215,6 +1706,7 @@ const ProductDetails = () => {
             ================================================= */}
 
             <div className="flex flex-col">
+
               {/* Brand */}
 
               {product.brand && (
@@ -1236,17 +1728,29 @@ const ProductDetails = () => {
                   className="flex items-center gap-1"
                   aria-label={`Rating ${rating} out of 5`}
                 >
-                  {[1, 2, 3, 4, 5].map(
+                  {[
+                    1,
+                    2,
+                    3,
+                    4,
+                    5,
+                  ].map(
                     (star) =>
                       star <=
-                      Math.round(rating) ? (
+                      Math.round(
+                        rating
+                      ) ? (
                         <IoStar
-                          key={star}
+                          key={
+                            star
+                          }
                           className="text-yellow-500 text-lg"
                         />
                       ) : (
                         <IoStarOutline
-                          key={star}
+                          key={
+                            star
+                          }
                           className="text-gray-300 text-lg"
                         />
                       )
@@ -1255,14 +1759,22 @@ const ProductDetails = () => {
 
                 {rating > 0 && (
                   <span className="text-sm font-semibold text-gray-700">
-                    {rating.toFixed(1)}
+                    {rating.toFixed(
+                      1
+                    )}
                   </span>
                 )}
 
-                {Number(product.reviews || 0) >
-                  0 && (
+                {Number(
+                  product.reviews ||
+                    0
+                ) > 0 && (
                   <span className="text-sm text-gray-500">
-                    ({product.reviews} reviews)
+                    (
+                    {
+                      product.reviews
+                    }{" "}
+                    reviews)
                   </span>
                 )}
               </div>
@@ -1301,7 +1813,8 @@ const ProductDetails = () => {
                   SELECT COLOR
               ================================================= */}
 
-              {variants.length > 0 && (
+              {variants.length >
+                0 && (
                 <div className="mt-8">
                   <div className="flex items-center justify-between mb-4">
                     <div>
@@ -1323,12 +1836,15 @@ const ProductDetails = () => {
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {variants.map(
-                      (variant) => {
+                      (
+                        variant
+                      ) => {
                         const hasSizes =
                           Array.isArray(
                             variant?.sizes
                           ) &&
-                          variant.sizes.length >
+                          variant.sizes
+                            .length >
                             0;
 
                         const variantStock =
@@ -1351,7 +1867,8 @@ const ProductDetails = () => {
                               );
 
                         const isOutOfStock =
-                          variantStock <= 0;
+                          variantStock <=
+                          0;
 
                         /*
                         ------------------------------------------------
@@ -1372,13 +1889,6 @@ const ProductDetails = () => {
                         const isSelected =
                           selectedVariantId ===
                           currentVariantId;
-
-                        /*
-                        Virtual no-variant product:
-                        both IDs are empty.
-
-                        It should still appear selected.
-                        */
 
                         return (
                           <button
@@ -1488,8 +1998,8 @@ const ProductDetails = () => {
               {Array.isArray(
                 selectedVariant?.sizes
               ) &&
-                selectedVariant.sizes.length >
-                  0 && (
+                selectedVariant.sizes
+                  .length > 0 && (
                   <div className="mt-8">
                     <div className="flex items-center justify-between mb-4">
                       <h2 className="text-base font-bold">
@@ -1500,7 +2010,9 @@ const ProductDetails = () => {
                         <span className="text-sm text-gray-500">
                           Selected:{" "}
                           <span className="font-semibold text-black">
-                            {selectedSize}
+                            {
+                              selectedSize
+                            }
                           </span>
                         </span>
                       )}
@@ -1508,7 +2020,10 @@ const ProductDetails = () => {
 
                     <div className="flex flex-wrap gap-3">
                       {selectedVariant.sizes.map(
-                        (size, index) => {
+                        (
+                          size,
+                          index
+                        ) => {
                           const isSelected =
                             normalizeSize(
                               selectedSize
@@ -1519,7 +2034,8 @@ const ProductDetails = () => {
 
                           const outOfStock =
                             Number(
-                              size?.stock || 0
+                              size?.stock ||
+                                0
                             ) <= 0;
 
                           return (
@@ -1554,7 +2070,9 @@ const ProductDetails = () => {
                                 }
                               `}
                             >
-                              {size.size}
+                              {
+                                size.size
+                              }
                             </button>
                           );
                         }
@@ -1568,11 +2086,13 @@ const ProductDetails = () => {
               ================================================= */}
 
               <div className="mt-6">
-                {currentStock > 0 ? (
+                {currentStock >
+                0 ? (
                   <div className="inline-flex items-center gap-2 text-sm font-medium text-green-700 bg-green-50 px-4 py-2 rounded-full">
                     <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
 
-                    {currentStock <= 5
+                    {currentStock <=
+                    5
                       ? `Only ${currentStock} left in stock`
                       : "In Stock"}
                   </div>
@@ -1601,7 +2121,8 @@ const ProductDetails = () => {
                       decreaseQuantity
                     }
                     disabled={
-                      quantity <= 1
+                      quantity <=
+                      1
                     }
                     aria-label="Decrease quantity"
                     className="w-11 h-11 flex items-center justify-center hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
@@ -1619,7 +2140,8 @@ const ProductDetails = () => {
                       increaseQuantity
                     }
                     disabled={
-                      currentStock <= 0 ||
+                      currentStock <=
+                        0 ||
                       quantity >=
                         currentStock
                     }
@@ -1631,30 +2153,38 @@ const ProductDetails = () => {
                 </div>
               </div>
 
-                    <div className="mt-4">
-                                    <a
-  href="https://www.facebook.com/spriengge.shop"
-  target="_blank"
-  rel="noopener noreferrer"
-  className="group inline-flex items-center gap-3 px-6 py-3.5 rounded-xl
-  bg-[#1877F2] text-white font-semibold
-  shadow-lg shadow-blue-500/20
-  hover:bg-[#166FE5] hover:shadow-xl hover:shadow-blue-500/30
-  hover:-translate-y-0.5
-  transition-all duration-300"
->
-  <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/15">
-    <FaFacebookF size={16} />
-  </span>
+              {/* =================================================
+                  FACEBOOK ORDER
+              ================================================= */}
 
-  <span>Order via Facebook</span>
+              <div className="mt-4">
+                <a
+                  href="https://www.facebook.com/spriengge.shop"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group inline-flex items-center gap-3 px-6 py-3.5 rounded-xl
+                  bg-[#1877F2] text-white font-semibold
+                  shadow-lg shadow-blue-500/20
+                  hover:bg-[#166FE5] hover:shadow-xl hover:shadow-blue-500/30
+                  hover:-translate-y-0.5
+                  transition-all duration-300"
+                >
+                  <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/15">
+                    <FaFacebookF
+                      size={16}
+                    />
+                  </span>
 
-  <ArrowRight
-    size={18}
-    className="group-hover:translate-x-1 transition-transform duration-300"
-  />
-</a>
-                    </div>
+                  <span>
+                    Order via Facebook
+                  </span>
+
+                  <ArrowRight
+                    size={18}
+                    className="group-hover:translate-x-1 transition-transform duration-300"
+                  />
+                </a>
+              </div>
 
               {/* =================================================
                   ACTION BUTTONS
@@ -1667,11 +2197,13 @@ const ProductDetails = () => {
                     handleAddToCart
                   }
                   disabled={
-                    currentStock <= 0
+                    currentStock <=
+                    0
                   }
                   className="cursor-pointer h-14 bg-black text-white rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-gray-800 transition disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
                   <FiShoppingBag className="text-lg" />
+
                   Add to Cart
                 </button>
 
@@ -1679,11 +2211,14 @@ const ProductDetails = () => {
                   type="button"
                   onClick={() =>
                     setWishlist(
-                      (prev) => !prev
+                      (prev) =>
+                        !prev
                     )
                   }
                   aria-label="Add product to wishlist"
-                  aria-pressed={wishlist}
+                  aria-pressed={
+                    wishlist
+                  }
                   className={`w-14 h-14 rounded-xl border flex items-center justify-center transition ${
                     wishlist
                       ? "bg-red-50 border-red-200 text-red-500"
@@ -1702,9 +2237,12 @@ const ProductDetails = () => {
 
               <button
                 type="button"
-                onClick={handleBuyNow}
+                onClick={
+                  handleBuyNow
+                }
                 disabled={
-                  currentStock <= 0
+                  currentStock <=
+                  0
                 }
                 className="cursor-pointer h-14 mt-3 w-full rounded-xl border-2 border-black bg-white text-black font-semibold hover:bg-black hover:text-white transition disabled:border-gray-300 disabled:text-gray-400 disabled:cursor-not-allowed"
               >
@@ -1762,6 +2300,7 @@ const ProductDetails = () => {
 
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
           <div className="border-t border-gray-200 pt-10">
+
             {/* ==================================================
                 PRODUCT OVERVIEW
             ================================================== */}
@@ -1792,10 +2331,12 @@ const ProductDetails = () => {
             ================================================== */}
 
             {Array.isArray(
-              product.details?.features
+              product.details
+                ?.features
             ) &&
-              product.details.features
-                .length > 0 && (
+              product.details
+                .features.length >
+                0 && (
                 <section className="mb-12">
                   <div className="flex items-center gap-3 mb-5">
                     <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
@@ -1814,7 +2355,9 @@ const ProductDetails = () => {
                         index
                       ) => (
                         <div
-                          key={index}
+                          key={
+                            index
+                          }
                           className="group border border-gray-200 rounded-2xl p-5 hover:border-gray-400 hover:shadow-sm transition"
                         >
                           <div className="flex items-start gap-3">
@@ -1823,7 +2366,9 @@ const ProductDetails = () => {
                             </div>
 
                             <p className="text-gray-700 leading-6">
-                              {feature}
+                              {
+                                feature
+                              }
                             </p>
                           </div>
                         </div>
@@ -1837,8 +2382,10 @@ const ProductDetails = () => {
                 SPECIFICATIONS
             ================================================== */}
 
-            {product.details?.specifications &&
-              typeof product.details
+            {product.details
+              ?.specifications &&
+              typeof product
+                .details
                 .specifications ===
                 "object" &&
               !Array.isArray(
@@ -1865,7 +2412,8 @@ const ProductDetails = () => {
                       <table className="w-full text-sm">
                         <tbody>
                           {Object.entries(
-                            product.details
+                            product
+                              .details
                               .specifications
                           ).map(
                             (
@@ -1876,7 +2424,9 @@ const ProductDetails = () => {
                               index
                             ) => (
                               <tr
-                                key={key}
+                                key={
+                                  key
+                                }
                                 className={
                                   index %
                                     2 ===
@@ -1886,7 +2436,9 @@ const ProductDetails = () => {
                                 }
                               >
                                 <td className="px-5 py-4 font-semibold text-gray-800 w-1/3 border-r border-gray-200">
-                                  {key}
+                                  {
+                                    key
+                                  }
                                 </td>
 
                                 <td className="px-5 py-4 text-gray-600">
@@ -1914,12 +2466,14 @@ const ProductDetails = () => {
             ================================================== */}
 
             {((Array.isArray(
-              product.details?.howToUse
+              product.details
+                ?.howToUse
             ) &&
               product.details.howToUse
                 .length > 0) ||
-              (typeof product.details
-                ?.howToUse === "string" &&
+              (typeof product
+                .details?.howToUse ===
+                "string" &&
                 product.details.howToUse.trim() !==
                   "")) && (
               <div className="border-t border-gray-200">
@@ -1962,13 +2516,17 @@ const ProductDetails = () => {
                             index
                           ) => (
                             <li
-                              key={index}
+                              key={
+                                index
+                              }
                               className="flex items-start gap-3"
                             >
                               <FiCheck className="mt-1 text-green-600 flex-shrink-0" />
 
                               <span>
-                                {item}
+                                {
+                                  item
+                                }
                               </span>
                             </li>
                           )
@@ -1977,7 +2535,8 @@ const ProductDetails = () => {
                     ) : (
                       <p className="whitespace-pre-line">
                         {
-                          product.details
+                          product
+                            .details
                             .howToUse
                         }
                       </p>
@@ -1996,9 +2555,10 @@ const ProductDetails = () => {
                 ?.careInstructions
             ) &&
               product.details
-                .careInstructions.length >
-                0) ||
-              (typeof product.details
+                .careInstructions
+                .length > 0) ||
+              (typeof product
+                .details
                 ?.careInstructions ===
                 "string" &&
                 product.details.careInstructions.trim() !==
@@ -2007,7 +2567,9 @@ const ProductDetails = () => {
                 <button
                   type="button"
                   onClick={() =>
-                    toggleSection("care")
+                    toggleSection(
+                      "care"
+                    )
                   }
                   className="w-full py-5 flex items-center justify-between text-left"
                 >
@@ -2041,13 +2603,17 @@ const ProductDetails = () => {
                             index
                           ) => (
                             <li
-                              key={index}
+                              key={
+                                index
+                              }
                               className="flex items-start gap-3"
                             >
                               <FiCheck className="mt-1 text-green-600 flex-shrink-0" />
 
                               <span>
-                                {item}
+                                {
+                                  item
+                                }
                               </span>
                             </li>
                           )
@@ -2056,7 +2622,8 @@ const ProductDetails = () => {
                     ) : (
                       <p className="whitespace-pre-line">
                         {
-                          product.details
+                          product
+                            .details
                             .careInstructions
                         }
                       </p>
@@ -2074,9 +2641,11 @@ const ProductDetails = () => {
               product.details
                 ?.whatsIncluded
             ) &&
-              product.details.whatsIncluded
+              product.details
+                .whatsIncluded
                 .length > 0) ||
-              (typeof product.details
+              (typeof product
+                .details
                 ?.whatsIncluded ===
                 "string" &&
                 product.details.whatsIncluded.trim() !==
@@ -2121,12 +2690,16 @@ const ProductDetails = () => {
                             index
                           ) => (
                             <li
-                              key={index}
+                              key={
+                                index
+                              }
                               className="flex items-center gap-3 text-gray-600"
                             >
                               <FiCheck className="text-green-600" />
 
-                              {item}
+                              {
+                                item
+                              }
                             </li>
                           )
                         )}
@@ -2134,7 +2707,8 @@ const ProductDetails = () => {
                     ) : (
                       <p className="text-gray-600 whitespace-pre-line">
                         {
-                          product.details
+                          product
+                            .details
                             .whatsIncluded
                         }
                       </p>
@@ -2146,18 +2720,10 @@ const ProductDetails = () => {
 
             {/* ==================================================
                 DELIVERY
-
-                Backend schema:
-                deliveryInfo: String
-
-                So DON'T use:
-                deliveryInfo.insideDhaka
-                deliveryInfo.outsideDhaka
-                deliveryInfo.deliveryCharge
-                deliveryInfo.note
             ================================================== */}
 
-            {typeof product.details
+            {typeof product
+              .details
               ?.deliveryInfo ===
               "string" &&
               product.details.deliveryInfo.trim() !==
@@ -2194,7 +2760,8 @@ const ProductDetails = () => {
                       <div className="bg-gray-50 rounded-xl p-5">
                         <p className="text-gray-600 leading-7 whitespace-pre-line">
                           {
-                            product.details
+                            product
+                              .details
                               .deliveryInfo
                           }
                         </p>
@@ -2208,7 +2775,8 @@ const ProductDetails = () => {
                 RETURN POLICY
             ================================================== */}
 
-            {typeof product.details
+            {typeof product
+              .details
               ?.returnPolicy ===
               "string" &&
               product.details.returnPolicy.trim() !==
@@ -2243,7 +2811,8 @@ const ProductDetails = () => {
                     "return" && (
                     <div className="pb-6 text-gray-600 leading-7 whitespace-pre-line">
                       {
-                        product.details
+                        product
+                          .details
                           .returnPolicy
                       }
                     </div>
@@ -2255,7 +2824,8 @@ const ProductDetails = () => {
                 WARRANTY
             ================================================== */}
 
-            {typeof product.details
+            {typeof product
+              .details
               ?.warranty ===
               "string" &&
               product.details.warranty.trim() !==
@@ -2290,7 +2860,8 @@ const ProductDetails = () => {
                     "warranty" && (
                     <div className="pb-6 text-gray-600 leading-7 whitespace-pre-line">
                       {
-                        product.details
+                        product
+                          .details
                           .warranty
                       }
                     </div>
@@ -2305,7 +2876,8 @@ const ProductDetails = () => {
             {Array.isArray(
               product.tags
             ) &&
-              product.tags.length > 0 && (
+              product.tags.length >
+                0 && (
                 <div className="border-t border-gray-200 pt-6">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-sm">
@@ -2313,7 +2885,10 @@ const ProductDetails = () => {
                     </span>
 
                     {product.tags.map(
-                      (tag, index) => (
+                      (
+                        tag,
+                        index
+                      ) => (
                         <span
                           key={`${tag}-${index}`}
                           className="px-3 py-1.5 rounded-full bg-gray-100 text-xs text-gray-600"

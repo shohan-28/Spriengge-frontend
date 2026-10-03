@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useParams } from "react-router-dom";
 
 import {
@@ -29,19 +35,52 @@ const API_URL = RAW_API_URL
   .replace(/\/orders$/, "");
 
 /* =========================================================
+   META PIXEL HELPER
+========================================================= */
+
+const trackMetaEvent = (
+  eventName,
+  eventData = {}
+) => {
+  if (
+    typeof window === "undefined" ||
+    typeof window.fbq !== "function"
+  ) {
+    return;
+  }
+
+  try {
+    window.fbq(
+      "track",
+      eventName,
+      eventData
+    );
+  } catch (error) {
+    console.error(
+      `Meta Pixel ${eventName} error:`,
+      error
+    );
+  }
+};
+
+/* =========================================================
    HELPERS
 ========================================================= */
 
 const normalizeProductId = (value) => {
   const numberValue = Number(value);
 
-  return Number.isFinite(numberValue) && numberValue > 0
+  return Number.isFinite(numberValue) &&
+    numberValue > 0
     ? numberValue
     : null;
 };
 
 const cleanString = (value) => {
-  if (value === null || value === undefined) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
     return "";
   }
 
@@ -79,8 +118,12 @@ const getProductImages = (product) => {
      1. TOP LEVEL product.image
   ------------------------------------------------------- */
 
-  if (isValidImageUrl(product?.image)) {
-    images.push(product.image.trim());
+  if (
+    isValidImageUrl(product?.image)
+  ) {
+    images.push(
+      product.image.trim()
+    );
   }
 
   /* -------------------------------------------------------
@@ -99,12 +142,18 @@ const getProductImages = (product) => {
      3. details.images
   ------------------------------------------------------- */
 
-  if (Array.isArray(product?.details?.images)) {
-    product.details.images.forEach((image) => {
-      if (isValidImageUrl(image)) {
-        images.push(image.trim());
+  if (
+    Array.isArray(
+      product?.details?.images
+    )
+  ) {
+    product.details.images.forEach(
+      (image) => {
+        if (isValidImageUrl(image)) {
+          images.push(image.trim());
+        }
       }
-    });
+    );
   }
 
   /* -------------------------------------------------------
@@ -112,19 +161,37 @@ const getProductImages = (product) => {
   ------------------------------------------------------- */
 
   if (Array.isArray(product?.variants)) {
-    product.variants.forEach((variant) => {
-      if (Array.isArray(variant?.images)) {
-        variant.images.forEach((image) => {
-          if (isValidImageUrl(image)) {
-            images.push(image.trim());
-          }
-        });
-      }
+    product.variants.forEach(
+      (variant) => {
+        if (
+          Array.isArray(
+            variant?.images
+          )
+        ) {
+          variant.images.forEach(
+            (image) => {
+              if (
+                isValidImageUrl(image)
+              ) {
+                images.push(
+                  image.trim()
+                );
+              }
+            }
+          );
+        }
 
-      if (isValidImageUrl(variant?.image)) {
-        images.push(variant.image.trim());
+        if (
+          isValidImageUrl(
+            variant?.image
+          )
+        ) {
+          images.push(
+            variant.image.trim()
+          );
+        }
       }
-    });
+    );
   }
 
   /* -------------------------------------------------------
@@ -135,7 +202,8 @@ const getProductImages = (product) => {
 };
 
 const getProductImage = (product) => {
-  const images = getProductImages(product);
+  const images =
+    getProductImages(product);
 
   return images[0] || "";
 };
@@ -147,17 +215,23 @@ const getProductImage = (product) => {
 ========================================================= */
 
 const getProductPrice = (product) => {
-  const price = Number(product?.price);
+  const price = Number(
+    product?.price
+  );
 
-  return Number.isFinite(price) && price >= 0
+  return Number.isFinite(price) &&
+    price >= 0
     ? price
     : 0;
 };
 
 const getProductOldPrice = (product) => {
-  const oldPrice = Number(product?.oldPrice);
+  const oldPrice = Number(
+    product?.oldPrice
+  );
 
-  return Number.isFinite(oldPrice) && oldPrice > 0
+  return Number.isFinite(oldPrice) &&
+    oldPrice > 0
     ? oldPrice
     : 0;
 };
@@ -167,10 +241,14 @@ const getProductDiscount = (
   price,
   oldPrice
 ) => {
-  const productDiscount = Number(product?.discount);
+  const productDiscount = Number(
+    product?.discount
+  );
 
   if (
-    Number.isFinite(productDiscount) &&
+    Number.isFinite(
+      productDiscount
+    ) &&
     productDiscount > 0
   ) {
     return productDiscount;
@@ -187,7 +265,9 @@ const getProductDiscount = (
    PRODUCT LIST NORMALIZER
 ========================================================= */
 
-const getProductsFromResponse = (data) => {
+const getProductsFromResponse = (
+  data
+) => {
   if (Array.isArray(data)) {
     return data;
   }
@@ -200,7 +280,11 @@ const getProductsFromResponse = (data) => {
     return data.data;
   }
 
-  if (Array.isArray(data?.data?.products)) {
+  if (
+    Array.isArray(
+      data?.data?.products
+    )
+  ) {
     return data.data.products;
   }
 
@@ -222,51 +306,75 @@ const LandingPage = () => {
      PRODUCT
   ======================================================= */
 
-  const [product, setProduct] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [productError, setProductError] = useState("");
+  const [product, setProduct] =
+    useState(null);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [productError, setProductError] =
+    useState("");
+
+  /* =======================================================
+     META PIXEL VIEW CONTENT CONTROL
+
+     একই product-এর জন্য ViewContent
+     বারবার fire হওয়া prevent করবে।
+  ======================================================= */
+
+  const trackedViewContentProduct =
+    useRef(null);
 
   /* =======================================================
      QUANTITY
   ======================================================= */
 
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] =
+    useState(1);
 
   /* =======================================================
      FORM
   ======================================================= */
 
-  const [formData, setFormData] = useState({
-    name: "",
-    phone: "",
-    address: "",
-    note: "",
-    deliveryArea: "",
-  });
+  const [formData, setFormData] =
+    useState({
+      name: "",
+      phone: "",
+      address: "",
+      note: "",
+      deliveryArea: "",
+    });
 
   /* =======================================================
      ORDER
   ======================================================= */
 
-  const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [successOrder, setSuccessOrder] = useState(null);
+  const [submitting, setSubmitting] =
+    useState(false);
+
+  const [success, setSuccess] =
+    useState(false);
+
+  const [successOrder, setSuccessOrder] =
+    useState(null);
 
   /* =======================================================
      IMAGE SLIDER
   ======================================================= */
 
-  const [activeImage, setActiveImage] = useState(0);
+  const [activeImage, setActiveImage] =
+    useState(0);
 
   /* =======================================================
      COUNTDOWN
   ======================================================= */
 
-  const [timeLeft, setTimeLeft] = useState({
-    hours: 1,
-    minutes: 59,
-    seconds: 59,
-  });
+  const [timeLeft, setTimeLeft] =
+    useState({
+      hours: 1,
+      minutes: 59,
+      seconds: 59,
+    });
 
   /* =======================================================
      LOAD PRODUCT
@@ -282,10 +390,13 @@ const LandingPage = () => {
         setProduct(null);
         setActiveImage(0);
 
-        const productId = normalizeProductId(id);
+        const productId =
+          normalizeProductId(id);
 
         if (!productId) {
-          throw new Error("Invalid product ID.");
+          throw new Error(
+            "Invalid product ID."
+          );
         }
 
         const response = await fetch(
@@ -308,23 +419,34 @@ const LandingPage = () => {
           );
         }
 
-        const products = getProductsFromResponse(data);
+        const products =
+          getProductsFromResponse(
+            data
+          );
 
         if (!products.length) {
-          throw new Error("No products found.");
+          throw new Error(
+            "No products found."
+          );
         }
 
         /* ---------------------------------------------------
            FIND PRODUCT
         --------------------------------------------------- */
 
-        const loadedProduct = products.find((item) => {
-          const itemProductId = normalizeProductId(
-            item?.productId ?? item?.id
-          );
+        const loadedProduct =
+          products.find((item) => {
+            const itemProductId =
+              normalizeProductId(
+                item?.productId ??
+                  item?.id
+              );
 
-          return itemProductId === productId;
-        });
+            return (
+              itemProductId ===
+              productId
+            );
+          });
 
         if (!loadedProduct) {
           throw new Error(
@@ -374,10 +496,11 @@ const LandingPage = () => {
           "================================="
         );
 
-        const loadedProductId = normalizeProductId(
-          loadedProduct?.productId ??
-            loadedProduct?.id
-        );
+        const loadedProductId =
+          normalizeProductId(
+            loadedProduct?.productId ??
+              loadedProduct?.id
+          );
 
         if (!loadedProductId) {
           throw new Error(
@@ -390,7 +513,9 @@ const LandingPage = () => {
         --------------------------------------------------- */
 
         const backendImages =
-          getProductImages(loadedProduct);
+          getProductImages(
+            loadedProduct
+          );
 
         console.log(
           "LANDING BACKEND IMAGES USED:",
@@ -407,7 +532,8 @@ const LandingPage = () => {
         const normalizedProduct = {
           ...loadedProduct,
 
-          productId: loadedProductId,
+          productId:
+            loadedProductId,
 
           image:
             backendImages[0] || "",
@@ -415,13 +541,19 @@ const LandingPage = () => {
           images: backendImages,
 
           price:
-            Number(loadedProduct?.price) || 0,
+            Number(
+              loadedProduct?.price
+            ) || 0,
 
           oldPrice:
-            Number(loadedProduct?.oldPrice) || 0,
+            Number(
+              loadedProduct?.oldPrice
+            ) || 0,
 
           discount:
-            Number(loadedProduct?.discount) || 0,
+            Number(
+              loadedProduct?.discount
+            ) || 0,
         };
 
         console.log(
@@ -440,7 +572,10 @@ const LandingPage = () => {
         );
 
         if (!cancelled) {
-          setProduct(normalizedProduct);
+          setProduct(
+            normalizedProduct
+          );
+
           setActiveImage(0);
         }
       } catch (error) {
@@ -470,15 +605,84 @@ const LandingPage = () => {
   }, [id]);
 
   /* =======================================================
+     META PIXEL — VIEW CONTENT
+
+     Product successfully load হওয়ার পরে
+     ViewContent fire হবে।
+  ======================================================= */
+
+  useEffect(() => {
+    if (!product) {
+      return;
+    }
+
+    const productId =
+      normalizeProductId(
+        product?.productId ??
+          product?.id
+      );
+
+    if (!productId) {
+      return;
+    }
+
+    if (
+      trackedViewContentProduct.current ===
+      String(productId)
+    ) {
+      return;
+    }
+
+    trackedViewContentProduct.current =
+      String(productId);
+
+    trackMetaEvent(
+      "ViewContent",
+      {
+        content_ids: [
+          String(productId),
+        ],
+
+        content_type: "product",
+
+        content_name:
+          cleanString(
+            product?.name
+          ) || "Product",
+
+        value:
+          Number(
+            product?.price
+          ) || 0,
+
+        currency: "BDT",
+      }
+    );
+
+    console.log(
+      "META PIXEL — ViewContent:",
+      {
+        productId,
+        productName:
+          product?.name,
+        price:
+          Number(
+            product?.price
+          ) || 0,
+      }
+    );
+  }, [product]);
+
+  /* =======================================================
      PRODUCT IMAGES
 
      Backend image list
   ======================================================= */
 
   const productImages = useMemo(() => {
-    const images = getProductImages(product);
-
-    return images;
+    return getProductImages(
+      product
+    );
   }, [product]);
 
   /* =======================================================
@@ -491,10 +695,16 @@ const LandingPage = () => {
       return;
     }
 
-    if (activeImage >= productImages.length) {
+    if (
+      activeImage >=
+      productImages.length
+    ) {
       setActiveImage(0);
     }
-  }, [productImages, activeImage]);
+  }, [
+    productImages,
+    activeImage,
+  ]);
 
   /* =======================================================
      AUTO IMAGE SLIDER
@@ -509,13 +719,15 @@ const LandingPage = () => {
 
     const timer = setInterval(() => {
       setActiveImage((prev) =>
-        prev === productImages.length - 1
+        prev ===
+        productImages.length - 1
           ? 0
           : prev + 1
       );
     }, 4500);
 
-    return () => clearInterval(timer);
+    return () =>
+      clearInterval(timer);
   }, [productImages.length]);
 
   /* =======================================================
@@ -559,7 +771,8 @@ const LandingPage = () => {
       });
     }, 1000);
 
-    return () => clearInterval(timer);
+    return () =>
+      clearInterval(timer);
   }, []);
 
   /* =======================================================
@@ -567,11 +780,15 @@ const LandingPage = () => {
   ======================================================= */
 
   const price = useMemo(() => {
-    return getProductPrice(product);
+    return getProductPrice(
+      product
+    );
   }, [product]);
 
   const oldPrice = useMemo(() => {
-    return getProductOldPrice(product);
+    return getProductOldPrice(
+      product
+    );
   }, [product]);
 
   const discount = useMemo(() => {
@@ -580,16 +797,27 @@ const LandingPage = () => {
       price,
       oldPrice
     );
-  }, [product, price, oldPrice]);
+  }, [
+    product,
+    price,
+    oldPrice,
+  ]);
 
   const productImage = useMemo(() => {
-    return getProductImage(product);
+    return getProductImage(
+      product
+    );
   }, [product]);
 
   const productStock = useMemo(() => {
-    const stock = Number(product?.stock);
+    const stock = Number(
+      product?.stock
+    );
 
-    if (Number.isFinite(stock) && stock >= 0) {
+    if (
+      Number.isFinite(stock) &&
+      stock >= 0
+    ) {
       return stock;
     }
 
@@ -601,9 +829,11 @@ const LandingPage = () => {
   ======================================================= */
 
   const deliveryCharge =
-    formData.deliveryArea === "inside-dhaka"
+    formData.deliveryArea ===
+    "inside-dhaka"
       ? 60
-      : formData.deliveryArea === "outside-dhaka"
+      : formData.deliveryArea ===
+        "outside-dhaka"
       ? 100
       : 0;
 
@@ -613,18 +843,26 @@ const LandingPage = () => {
 
   const safeQuantity = Math.max(
     1,
-    Math.floor(Number(quantity) || 1)
+    Math.floor(
+      Number(quantity) || 1
+    )
   );
 
-  const subtotal = price * safeQuantity;
-  const total = subtotal + deliveryCharge;
+  const subtotal =
+    price * safeQuantity;
+
+  const total =
+    subtotal + deliveryCharge;
 
   /* =======================================================
      INPUT
   ======================================================= */
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const {
+      name,
+      value,
+    } = e.target;
 
     setFormData((prev) => ({
       ...prev,
@@ -637,9 +875,10 @@ const LandingPage = () => {
   ======================================================= */
 
   const handlePhoneChange = (e) => {
-    const value = e.target.value
-      .replace(/\D/g, "")
-      .slice(0, 11);
+    const value =
+      e.target.value
+        .replace(/\D/g, "")
+        .slice(0, 11);
 
     setFormData((prev) => ({
       ...prev,
@@ -651,19 +890,20 @@ const LandingPage = () => {
      DELIVERY AREA
   ======================================================= */
 
-  const handleDeliveryAreaChange = (area) => {
-    if (
-      area !== "inside-dhaka" &&
-      area !== "outside-dhaka"
-    ) {
-      return;
-    }
+  const handleDeliveryAreaChange =
+    (area) => {
+      if (
+        area !== "inside-dhaka" &&
+        area !== "outside-dhaka"
+      ) {
+        return;
+      }
 
-    setFormData((prev) => ({
-      ...prev,
-      deliveryArea: area,
-    }));
-  };
+      setFormData((prev) => ({
+        ...prev,
+        deliveryArea: area,
+      }));
+    };
 
   /* =======================================================
      QUANTITY
@@ -671,10 +911,13 @@ const LandingPage = () => {
 
   const increaseQuantity = () => {
     setQuantity((prev) => {
-      const current = Math.max(
-        1,
-        Math.floor(Number(prev) || 1)
-      );
+      const current =
+        Math.max(
+          1,
+          Math.floor(
+            Number(prev) || 1
+          )
+        );
 
       if (
         productStock !== null &&
@@ -690,12 +933,17 @@ const LandingPage = () => {
 
   const decreaseQuantity = () => {
     setQuantity((prev) => {
-      const current = Math.max(
-        1,
-        Math.floor(Number(prev) || 1)
-      );
+      const current =
+        Math.max(
+          1,
+          Math.floor(
+            Number(prev) || 1
+          )
+        );
 
-      return current > 1 ? current - 1 : 1;
+      return current > 1
+        ? current - 1
+        : 1;
     });
   };
 
@@ -713,37 +961,51 @@ const LandingPage = () => {
     /* PRODUCT */
 
     if (!product) {
-      alert("Product not found.");
+      alert(
+        "Product not found."
+      );
       return;
     }
 
-    const productId = normalizeProductId(
-      product?.productId ?? product?.id
-    );
+    const productId =
+      normalizeProductId(
+        product?.productId ??
+          product?.id
+      );
 
     if (!productId) {
-      alert("Invalid product ID.");
+      alert(
+        "Invalid product ID."
+      );
       return;
     }
 
     /* NAME */
 
-    const customerName = cleanString(
-      formData.name
-    );
+    const customerName =
+      cleanString(
+        formData.name
+      );
 
     if (!customerName) {
-      alert("দয়া করে আপনার নাম লিখুন।");
+      alert(
+        "দয়া করে আপনার নাম লিখুন।"
+      );
       return;
     }
 
     /* PHONE */
 
-    const customerPhone = cleanString(
-      formData.phone
-    );
+    const customerPhone =
+      cleanString(
+        formData.phone
+      );
 
-    if (!/^01\d{9}$/.test(customerPhone)) {
+    if (
+      !/^01\d{9}$/.test(
+        customerPhone
+      )
+    ) {
       alert(
         "দয়া করে সঠিক ১১ সংখ্যার বাংলাদেশি মোবাইল নম্বর দিন।"
       );
@@ -752,9 +1014,10 @@ const LandingPage = () => {
 
     /* ADDRESS */
 
-    const customerAddress = cleanString(
-      formData.address
-    );
+    const customerAddress =
+      cleanString(
+        formData.address
+      );
 
     if (!customerAddress) {
       alert(
@@ -765,13 +1028,16 @@ const LandingPage = () => {
 
     /* DELIVERY AREA */
 
-    const customerDeliveryArea = cleanString(
-      formData.deliveryArea
-    );
+    const customerDeliveryArea =
+      cleanString(
+        formData.deliveryArea
+      );
 
     if (
-      customerDeliveryArea !== "inside-dhaka" &&
-      customerDeliveryArea !== "outside-dhaka"
+      customerDeliveryArea !==
+        "inside-dhaka" &&
+      customerDeliveryArea !==
+        "outside-dhaka"
     ) {
       alert(
         "দয়া করে ডেলিভারি এলাকা নির্বাচন করুন।"
@@ -781,10 +1047,13 @@ const LandingPage = () => {
 
     /* QUANTITY */
 
-    const finalQuantity = Math.max(
-      1,
-      Math.floor(Number(quantity) || 1)
-    );
+    const finalQuantity =
+      Math.max(
+        1,
+        Math.floor(
+          Number(quantity) || 1
+        )
+      );
 
     /* STOCK */
 
@@ -806,35 +1075,45 @@ const LandingPage = () => {
         `স্টকে মাত্র ${productStock}টি পণ্য আছে।`
       );
 
-      setQuantity(productStock);
+      setQuantity(
+        productStock
+      );
 
       return;
     }
 
     /* PRICE */
 
-    const finalPrice = Number(
-      product?.price
-    );
+    const finalPrice =
+      Number(
+        product?.price
+      );
 
     if (
-      !Number.isFinite(finalPrice) ||
+      !Number.isFinite(
+        finalPrice
+      ) ||
       finalPrice < 0
     ) {
-      alert("Invalid product price.");
+      alert(
+        "Invalid product price."
+      );
       return;
     }
 
     /* DELIVERY CHARGE */
 
-    let finalDeliveryCharge = 0;
+    let finalDeliveryCharge =
+      0;
 
     if (
-      customerDeliveryArea === "inside-dhaka"
+      customerDeliveryArea ===
+      "inside-dhaka"
     ) {
       finalDeliveryCharge = 60;
     } else if (
-      customerDeliveryArea === "outside-dhaka"
+      customerDeliveryArea ===
+      "outside-dhaka"
     ) {
       finalDeliveryCharge = 100;
     } else {
@@ -851,7 +1130,8 @@ const LandingPage = () => {
       finalPrice * finalQuantity;
 
     const finalTotal =
-      finalSubtotal + finalDeliveryCharge;
+      finalSubtotal +
+      finalDeliveryCharge;
 
     /* ORDER ITEM */
 
@@ -859,8 +1139,9 @@ const LandingPage = () => {
       productId,
 
       productName:
-        cleanString(product?.name) ||
-        "Product",
+        cleanString(
+          product?.name
+        ) || "Product",
 
       /* BACKEND PRODUCT IMAGE */
       productImage:
@@ -874,9 +1155,11 @@ const LandingPage = () => {
       /* BACKEND PRODUCT PRICE */
       price: finalPrice,
 
-      quantity: finalQuantity,
+      quantity:
+        finalQuantity,
 
-      subtotal: finalSubtotal,
+      subtotal:
+        finalSubtotal,
     };
 
     /* ORDER PAYLOAD */
@@ -888,7 +1171,9 @@ const LandingPage = () => {
 
       address: customerAddress,
 
-      note: cleanString(formData.note),
+      note: cleanString(
+        formData.note
+      ),
 
       deliveryArea:
         customerDeliveryArea,
@@ -896,8 +1181,9 @@ const LandingPage = () => {
       productId,
 
       productName:
-        cleanString(product?.name) ||
-        "Product",
+        cleanString(
+          product?.name
+        ) || "Product",
 
       /* BACKEND PRODUCT IMAGE */
       productImage:
@@ -906,24 +1192,31 @@ const LandingPage = () => {
       /* BACKEND PRODUCT PRICE */
       price: finalPrice,
 
-      quantity: finalQuantity,
+      quantity:
+        finalQuantity,
 
-      subtotal: finalSubtotal,
+      subtotal:
+        finalSubtotal,
 
       deliveryCharge:
         finalDeliveryCharge,
 
-      total: finalTotal,
+      total:
+        finalTotal,
 
       items: [orderItem],
 
-      orderSource: "landing-page",
+      orderSource:
+        "landing-page",
 
-      landingPageId: cleanString(id),
+      landingPageId:
+        cleanString(id),
 
-      paymentMethod: "cod",
+      paymentMethod:
+        "cod",
 
-      status: "pending",
+      status:
+        "pending",
     };
 
     console.log(
@@ -964,28 +1257,75 @@ const LandingPage = () => {
       "================================="
     );
 
+    /* =====================================================
+       META PIXEL — INITIATE CHECKOUT
+
+       সব validation সফল হওয়ার পরে
+       backend order request পাঠানোর আগে fire হবে।
+    ===================================================== */
+
+    trackMetaEvent(
+      "InitiateCheckout",
+      {
+        content_ids: [
+          String(productId),
+        ],
+
+        content_type: "product",
+
+        content_name:
+          cleanString(
+            product?.name
+          ) || "Product",
+
+        num_items:
+          finalQuantity,
+
+        value:
+          finalTotal,
+
+        currency: "BDT",
+      }
+    );
+
+    console.log(
+      "META PIXEL — InitiateCheckout:",
+      {
+        productId,
+        quantity:
+          finalQuantity,
+        value:
+          finalTotal,
+      }
+    );
+
     /* SEND ORDER */
 
     try {
       setSubmitting(true);
 
-      const response = await fetch(
-        `${API_URL}/orders`,
-        {
-          method: "POST",
+      const response =
+        await fetch(
+          `${API_URL}/orders`,
+          {
+            method: "POST",
 
-          headers: {
-            "Content-Type": "application/json",
-          },
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
 
-          body: JSON.stringify(orderData),
-        }
-      );
+            body: JSON.stringify(
+              orderData
+            ),
+          }
+        );
 
       let data = null;
 
       try {
-        data = await response.json();
+        data =
+          await response.json();
       } catch {
         data = null;
       }
@@ -1003,16 +1343,86 @@ const LandingPage = () => {
         );
       }
 
+      /* ===================================================
+         SUCCESSFUL ORDER ID
+      =================================================== */
+
+      const createdOrderId =
+        data?.order?._id ||
+        data?.order?.orderId ||
+        data?.data?._id ||
+        data?.data?.orderId ||
+        data?._id ||
+        data?.orderId ||
+        "";
+
+      /* ===================================================
+         META PIXEL — PURCHASE ⭐
+
+         IMPORTANT:
+         response.ok হওয়ার পরে মাত্র fire হবে।
+
+         Backend order fail করলে এই code পর্যন্ত
+         আসবে না, তাই false Purchase হবে না।
+      =================================================== */
+
+      trackMetaEvent(
+        "Purchase",
+        {
+          content_ids: [
+            String(productId),
+          ],
+
+          content_type:
+            "product",
+
+          content_name:
+            cleanString(
+              product?.name
+            ) || "Product",
+
+          num_items:
+            finalQuantity,
+
+          value:
+            finalTotal,
+
+          currency: "BDT",
+
+          ...(createdOrderId
+            ? {
+                order_id:
+                  String(
+                    createdOrderId
+                  ),
+              }
+            : {}),
+        }
+      );
+
+      console.log(
+        "META PIXEL — Purchase:",
+        {
+          productId,
+          productName:
+            product?.name,
+          quantity:
+            finalQuantity,
+          value:
+            finalTotal,
+          orderId:
+            createdOrderId ||
+            "Not returned",
+        }
+      );
+
       /* SUCCESS */
 
       setSuccessOrder({
         ...orderData,
 
         orderId:
-          data?.order?._id ||
-          data?.data?._id ||
-          data?._id ||
-          "",
+          createdOrderId,
       });
 
       setSuccess(true);
@@ -1031,6 +1441,12 @@ const LandingPage = () => {
         "Landing order submit error:",
         error
       );
+
+      /* ===================================================
+         IMPORTANT:
+         এখানে Purchase fire করা হয়নি।
+         কারণ order failed হলে Purchase হবে না।
+      =================================================== */
 
       alert(
         error?.message ||
@@ -1186,12 +1602,6 @@ const LandingPage = () => {
         }
       `}</style>
 
-      {/* =====================================================
-          HEADER
-      ===================================================== */}
-
-      
-
       <main>
         {/* ===================================================
             HERO
@@ -1203,7 +1613,8 @@ const LandingPage = () => {
           <div
             className="pointer-events-none absolute right-[-180px] bottom-10 w-[430px] h-[430px] rounded-full bg-[#eadbc7]/60 blur-[100px] soft-pulse"
             style={{
-              animationDelay: "1.5s",
+              animationDelay:
+                "1.5s",
             }}
           />
 
@@ -1222,17 +1633,23 @@ const LandingPage = () => {
                   <span className="inline-flex items-center gap-2 rounded-full bg-white/70 border border-black/[.06] px-3.5 py-2 text-[9px] sm:text-[10px] font-bold text-gray-500 backdrop-blur-xl">
                     <FiClock size={12} />
 
-                    {String(timeLeft.hours).padStart(
+                    {String(
+                      timeLeft.hours
+                    ).padStart(
                       1,
                       "0"
                     )}
                     :
-                    {String(timeLeft.minutes).padStart(
+                    {String(
+                      timeLeft.minutes
+                    ).padStart(
                       2,
                       "0"
                     )}
                     :
-                    {String(timeLeft.seconds).padStart(
+                    {String(
+                      timeLeft.seconds
+                    ).padStart(
                       2,
                       "0"
                     )}
@@ -1268,12 +1685,16 @@ const LandingPage = () => {
                   </div>
 
                   <span className="text-xs font-black">
-                    {Number(product.rating) || "4.9"}
+                    {Number(
+                      product.rating
+                    ) || "4.9"}
                   </span>
 
                   <span className="text-xs text-gray-400">
                     •{" "}
-                    {Number(product.reviews) ||
+                    {Number(
+                      product.reviews
+                    ) ||
                       "500+"}{" "}
                     happy customers
                   </span>
@@ -1286,15 +1707,18 @@ const LandingPage = () => {
                     ৳{price}
                   </span>
 
-                  {oldPrice > price && (
+                  {oldPrice >
+                    price && (
                     <span className="mb-1 text-lg text-red-400 line-through">
                       ৳{oldPrice}
                     </span>
                   )}
 
-                  {discount > 0 && (
+                  {discount >
+                    0 && (
                     <span className="mb-1 px-3 py-1.5 rounded-full bg-[#e7f2e9] text-[#3e7651] text-[10px] font-black">
-                      SAVE ৳{discount}
+                      SAVE ৳
+                      {discount}
                     </span>
                   )}
                 </div>
@@ -1330,7 +1754,8 @@ const LandingPage = () => {
                 <div className="absolute inset-[12%] rounded-full bg-[#d9e6db] blur-[80px] opacity-70 soft-pulse" />
 
                 <div className="relative">
-                  {discount > 0 && (
+                  {discount >
+                    0 && (
                     <div className="absolute -top-4 -right-2 sm:-top-6 sm:-right-5 z-30">
                       <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#171717] text-white flex flex-col items-center justify-center rotate-6 shadow-xl">
                         <span className="text-[8px] uppercase tracking-widest text-white/50">
@@ -1338,7 +1763,10 @@ const LandingPage = () => {
                         </span>
 
                         <span className="text-sm sm:text-base font-black">
-                          ৳{discount}
+                          ৳
+                          {
+                            discount
+                          }
                         </span>
                       </div>
                     </div>
@@ -1347,21 +1775,25 @@ const LandingPage = () => {
                   <div className="image-card relative overflow-hidden rounded-[2.5rem] sm:rounded-[3rem] bg-white border border-black/[.05] shadow-[0_30px_80px_rgba(35,30,20,.09)]">
                     <div className="relative aspect-[4/4.25] sm:aspect-[4/4.5] overflow-hidden">
 
-                      {/* =================================================
-                          BACKEND PRODUCT IMAGES
-                      ================================================= */}
+                      {/* BACKEND PRODUCT IMAGES */}
 
-                      {productImages.length > 0 ? (
+                      {productImages.length >
+                      0 ? (
                         productImages.map(
-                          (image, index) => (
+                          (
+                            image,
+                            index
+                          ) => (
                             <img
                               key={`${image}-${index}`}
                               src={image}
                               alt={`${product.name} ${
-                                index + 1
+                                index +
+                                1
                               }`}
                               loading={
-                                index === 0
+                                index ===
+                                0
                                   ? "eager"
                                   : "lazy"
                               }
@@ -1382,7 +1814,9 @@ const LandingPage = () => {
                                     : "opacity-0 scale-[1.05]"
                                 }
                               `}
-                              onError={(e) => {
+                              onError={(
+                                e
+                              ) => {
                                 e.currentTarget.style.display =
                                   "none";
                               }}
@@ -1393,7 +1827,9 @@ const LandingPage = () => {
                         <div className="absolute inset-0 flex items-center justify-center bg-[#f3f1ec]">
                           <div className="text-center px-6">
                             <FiShoppingBag
-                              size={35}
+                              size={
+                                35
+                              }
                               className="mx-auto text-gray-300"
                             />
 
@@ -1420,12 +1856,18 @@ const LandingPage = () => {
 
                       {/* IMAGE INDICATORS */}
 
-                      {productImages.length > 1 && (
+                      {productImages.length >
+                        1 && (
                         <div className="absolute right-5 bottom-6 flex flex-col gap-2">
                           {productImages.map(
-                            (_, index) => (
+                            (
+                              _,
+                              index
+                            ) => (
                               <button
-                                key={index}
+                                key={
+                                  index
+                                }
                                 type="button"
                                 onClick={() =>
                                   setActiveImage(
@@ -1433,7 +1875,8 @@ const LandingPage = () => {
                                   )
                                 }
                                 aria-label={`Show image ${
-                                  index + 1
+                                  index +
+                                  1
                                 }`}
                                 className={`
                                   rounded-full
@@ -1467,8 +1910,10 @@ const LandingPage = () => {
                       <div className="hidden sm:flex items-center gap-2 text-[9px] text-gray-400 font-bold">
                         <span className="w-2 h-2 rounded-full bg-emerald-500" />
 
-                        {productStock !== null
-                          ? productStock > 0
+                        {productStock !==
+                        null
+                          ? productStock >
+                            0
                             ? "In Stock"
                             : "Out of Stock"
                           : "Available"}
@@ -1550,8 +1995,12 @@ const LandingPage = () => {
                   <div className="w-20 h-20 rounded-2xl overflow-hidden bg-white border border-black/[.05] shadow-sm">
                     {productImage ? (
                       <img
-                        src={productImage}
-                        alt={product.name}
+                        src={
+                          productImage
+                        }
+                        alt={
+                          product.name
+                        }
                         className="w-full h-full object-cover"
                       />
                     ) : (
@@ -1570,7 +2019,9 @@ const LandingPage = () => {
                     </p>
 
                     <h3 className="mt-1 text-sm font-black">
-                      {product.name}
+                      {
+                        product.name
+                      }
                     </h3>
 
                     <p className="mt-1 text-sm font-black">
@@ -1625,15 +2076,23 @@ const LandingPage = () => {
                     </p>
                   </div>
 
-                  <form onSubmit={handleSubmit}>
+                  <form
+                    onSubmit={
+                      handleSubmit
+                    }
+                  >
                     {/* NAME + PHONE */}
 
                     <div className="grid sm:grid-cols-2 gap-3">
                       <PremiumInput
                         label="Full Name"
                         name="name"
-                        value={formData.name}
-                        onChange={handleChange}
+                        value={
+                          formData.name
+                        }
+                        onChange={
+                          handleChange
+                        }
                         placeholder="আপনার নাম"
                         required
                       />
@@ -1642,8 +2101,12 @@ const LandingPage = () => {
                         label="Phone Number"
                         name="phone"
                         type="tel"
-                        value={formData.phone}
-                        onChange={handlePhoneChange}
+                        value={
+                          formData.phone
+                        }
+                        onChange={
+                          handlePhoneChange
+                        }
                         placeholder="01XXXXXXXXX"
                         inputMode="numeric"
                         maxLength={11}
@@ -1664,8 +2127,12 @@ const LandingPage = () => {
 
                       <textarea
                         name="address"
-                        value={formData.address}
-                        onChange={handleChange}
+                        value={
+                          formData.address
+                        }
+                        onChange={
+                          handleChange
+                        }
                         placeholder="বাড়ি, রোড, গ্রাম, এলাকা, বাজার..."
                         required
                         rows={3}
@@ -1687,8 +2154,12 @@ const LandingPage = () => {
                       <input
                         type="text"
                         name="note"
-                        value={formData.note}
-                        onChange={handleChange}
+                        value={
+                          formData.note
+                        }
+                        onChange={
+                          handleChange
+                        }
                         placeholder="কোনো বিশেষ নির্দেশনা?"
                         className="w-full h-12 px-4 rounded-xl bg-[#f7f6f3] border border-transparent text-sm outline-none focus:bg-white focus:border-black/10 transition"
                       />
@@ -1701,8 +2172,12 @@ const LandingPage = () => {
                         <div className="w-16 h-16 rounded-xl overflow-hidden bg-white shrink-0">
                           {productImage ? (
                             <img
-                              src={productImage}
-                              alt={product.name}
+                              src={
+                                productImage
+                              }
+                              alt={
+                                product.name
+                              }
                               className="w-full h-full object-cover"
                             />
                           ) : (
@@ -1717,11 +2192,16 @@ const LandingPage = () => {
 
                         <div className="flex-1 min-w-0">
                           <h3 className="text-sm font-black truncate">
-                            {product.name}
+                            {
+                              product.name
+                            }
                           </h3>
 
                           <p className="mt-1 text-xs text-gray-400">
-                            ৳{price} × {safeQuantity}
+                            ৳{price} ×{" "}
+                            {
+                              safeQuantity
+                            }
                           </p>
                         </div>
 
@@ -1732,7 +2212,8 @@ const LandingPage = () => {
                               decreaseQuantity
                             }
                             disabled={
-                              safeQuantity <= 1
+                              safeQuantity <=
+                              1
                             }
                             className="w-9 h-9 flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 transition"
                           >
@@ -1740,7 +2221,9 @@ const LandingPage = () => {
                           </button>
 
                           <span className="w-7 text-center text-sm font-black">
-                            {safeQuantity}
+                            {
+                              safeQuantity
+                            }
                           </span>
 
                           <button
@@ -1751,7 +2234,8 @@ const LandingPage = () => {
                             disabled={
                               productStock !==
                                 null &&
-                              productStock > 0 &&
+                              productStock >
+                                0 &&
                               safeQuantity >=
                                 productStock
                             }
@@ -1911,12 +2395,22 @@ const LandingPage = () => {
                     <div className="mt-5 border-t border-black/[.06] pt-5 space-y-3">
                       <div className="flex justify-between text-xs text-gray-500">
                         <span>
-                          Product ({safeQuantity} × ৳
-                          {price})
+                          Product (
+                          {
+                            safeQuantity
+                          }{" "}
+                          × ৳
+                          {
+                            price
+                          }
+                          )
                         </span>
 
                         <span className="font-semibold text-gray-800">
-                          ৳{subtotal}
+                          ৳
+                          {
+                            subtotal
+                          }
                         </span>
                       </div>
 
@@ -1939,7 +2433,10 @@ const LandingPage = () => {
                           </p>
 
                           <p className="mt-1 text-3xl font-black tracking-[-.05em]">
-                            ৳{total}
+                            ৳
+                            {
+                              total
+                            }
                           </p>
                         </div>
 
@@ -1955,8 +2452,10 @@ const LandingPage = () => {
                       type="submit"
                       disabled={
                         submitting ||
-                        (productStock !== null &&
-                          productStock <= 0)
+                        (productStock !==
+                          null &&
+                          productStock <=
+                            0)
                       }
                       className="
                         group
@@ -1985,13 +2484,17 @@ const LandingPage = () => {
 
                           Processing...
                         </>
-                      ) : productStock !== null &&
-                        productStock <= 0 ? (
+                      ) : productStock !==
+                          null &&
+                        productStock <=
+                          0 ? (
                         "Out of Stock"
                       ) : (
                         <>
                           Confirm Order — ৳
-                          {total}
+                          {
+                            total
+                          }
 
                           <span className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center group-hover:translate-x-1 transition-transform">
                             <FiArrowRight
@@ -2045,7 +2548,9 @@ const LandingPage = () => {
               </div>
 
               <p className="text-[8px] uppercase tracking-[.18em] text-gray-400 font-black">
-                © {new Date().getFullYear()} Spriengge
+                ©{" "}
+                {new Date().getFullYear()}{" "}
+                Spriengge
               </p>
             </div>
           </div>
@@ -2062,8 +2567,13 @@ const LandingPage = () => {
             <button
               type="button"
               onClick={() => {
-                setSuccess(false);
-                setSuccessOrder(null);
+                setSuccess(
+                  false
+                );
+
+                setSuccessOrder(
+                  null
+                );
               }}
               className="absolute top-4 right-4 w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition"
             >
@@ -2090,7 +2600,9 @@ const LandingPage = () => {
                 </p>
 
                 <p className="mt-1 text-xs font-bold break-all">
-                  {successOrder.orderId}
+                  {
+                    successOrder.orderId
+                  }
                 </p>
               </div>
             )}
@@ -2110,8 +2622,13 @@ const LandingPage = () => {
             <button
               type="button"
               onClick={() => {
-                setSuccess(false);
-                setSuccessOrder(null);
+                setSuccess(
+                  false
+                );
+
+                setSuccessOrder(
+                  null
+                );
               }}
               className="mt-5 w-full h-12 rounded-xl bg-[#171717] text-white font-bold hover:bg-[#292929] transition"
             >
@@ -2128,7 +2645,9 @@ const LandingPage = () => {
    BENEFIT
 ========================================================= */
 
-const Benefit = ({ text }) => {
+const Benefit = ({
+  text,
+}) => {
   return (
     <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-semibold text-gray-600">
       <span className="w-5 h-5 rounded-full bg-[#e7f2e9] text-[#3e7651] flex items-center justify-center shrink-0">
@@ -2200,10 +2719,16 @@ const PremiumInput = ({
         name={name}
         value={value}
         onChange={onChange}
-        placeholder={placeholder}
+        placeholder={
+          placeholder
+        }
         required={required}
-        inputMode={inputMode}
-        maxLength={maxLength}
+        inputMode={
+          inputMode
+        }
+        maxLength={
+          maxLength
+        }
         className="
           w-full
           h-12
