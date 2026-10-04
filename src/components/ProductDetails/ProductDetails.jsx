@@ -172,8 +172,13 @@ const ProductDetails = () => {
   */
 
   useEffect(() => {
-  dispatch(fetchProduct());
-}, [dispatch]);
+    if (products.length === 0) {
+      dispatch(fetchProduct());
+    }
+  }, [
+    dispatch,
+    products.length,
+  ]);
 
   /*
   ============================================================
