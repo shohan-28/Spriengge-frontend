@@ -426,14 +426,20 @@ const request = async (
   const url = `${API_URL}${cleanEndpoint}`;
 
   const response = await fetch(url, {
-    ...options,
+  ...options,
 
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-  });
+  headers: {
+    Accept: "application/json",
+
+    ...(options.body
+      ? {
+          "Content-Type": "application/json",
+        }
+      : {}),
+
+    ...(options.headers || {}),
+  },
+});
 
   let data = null;
 
