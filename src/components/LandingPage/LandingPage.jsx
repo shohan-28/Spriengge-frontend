@@ -1607,7 +1607,7 @@ const LandingPage = () => {
             HERO
         =================================================== */}
 
-        <section className="relative min-h-screen flex items-center pt-24 pb-12 sm:pt-28 lg:pt-24">
+        <section className="relative min-h-screen flex items-center pt-5 pb-2 sm:pt-28 lg:pt-5">
           <div className="pointer-events-none absolute top-10 left-[-180px] w-[420px] h-[420px] rounded-full bg-[#dce9df]/60 blur-[90px] soft-pulse" />
 
           <div
@@ -1926,39 +1926,7 @@ const LandingPage = () => {
           </div>
         </section>
 
-        {/* ===================================================
-            TRUST STRIP
-        =================================================== */}
-
-        <section className="border-y border-black/[.05] bg-white/60">
-          <div className="max-w-6xl mx-auto px-5 sm:px-8 py-7">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
-              <TrustItem
-                icon={<FiShield />}
-                title="Secure Order"
-                text="Your information is protected"
-              />
-
-              <TrustItem
-                icon={<FiTruck />}
-                title="Fast Delivery"
-                text="Reliable delivery service"
-              />
-
-              <TrustItem
-                icon={<FiCheck />}
-                title="Cash on Delivery"
-                text="Pay when you receive"
-              />
-
-              <TrustItem
-                icon={<FiStar />}
-                title="Premium Quality"
-                text="Carefully selected products"
-              />
-            </div>
-          </div>
-        </section>
+       
 
         {/* ===================================================
             ORDER SECTION
@@ -1969,86 +1937,11 @@ const LandingPage = () => {
           className="relative py-16 sm:py-20 lg:py-28"
         >
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid lg:grid-cols-[.78fr_1.22fr] gap-8 lg:gap-12 items-start">
+            <div className="">
 
               {/* ORDER INFO */}
 
-              <div className="lg:sticky lg:top-10 reveal-up">
-                <p className="text-[9px] uppercase tracking-[.28em] font-black text-gray-400">
-                  Quick & Easy
-                </p>
-
-                <h2 className="mt-3 text-4xl sm:text-5xl font-black tracking-[-.06em] leading-[.92]">
-                  Get yours
-                  <br />
-                  today.
-                </h2>
-
-                <p className="mt-5 text-sm text-gray-500 leading-7 max-w-md">
-                  শুধু আপনার তথ্যগুলো পূরণ করুন।
-                  অর্ডার পাওয়ার পর আমাদের টিম
-                  আপনার সাথে যোগাযোগ করে
-                  অর্ডারটি কনফার্ম করবে।
-                </p>
-
-                <div className="mt-8 flex items-center gap-4">
-                  <div className="w-20 h-20 rounded-2xl overflow-hidden bg-white border border-black/[.05] shadow-sm">
-                    {productImage ? (
-                      <img
-                        src={
-                          productImage
-                        }
-                        alt={
-                          product.name
-                        }
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-[#f3f1ec]">
-                        <FiShoppingBag
-                          size={20}
-                          className="text-gray-300"
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <p className="text-[9px] uppercase tracking-wider text-gray-400 font-bold">
-                      Your Selection
-                    </p>
-
-                    <h3 className="mt-1 text-sm font-black">
-                      {
-                        product.name
-                      }
-                    </h3>
-
-                    <p className="mt-1 text-sm font-black">
-                      ৳{price}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-7 rounded-2xl bg-[#ebe8df] p-4">
-                  <div className="flex gap-3">
-                    <div className="w-9 h-9 shrink-0 rounded-xl bg-white flex items-center justify-center">
-                      <FiTruck size={15} />
-                    </div>
-
-                    <div>
-                      <p className="text-xs font-black">
-                        Delivery Information
-                      </p>
-
-                      <p className="mt-1 text-[10px] text-gray-500 leading-5">
-                        ঢাকা শহরের ভিতরে: ৳60 ·
-                        ঢাকার বাইরে: ৳100
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+             
 
               {/* FORM */}
 
@@ -2393,7 +2286,7 @@ const LandingPage = () => {
                     {/* SUMMARY */}
 
                     <div className="mt-5 border-t border-black/[.06] pt-5 space-y-3">
-                      <div className="flex justify-between text-xs text-gray-500">
+                      <div className="flex justify-between text-lg text-gray-500">
                         <span>
                           Product (
                           {
@@ -2414,7 +2307,7 @@ const LandingPage = () => {
                         </span>
                       </div>
 
-                      <div className="flex justify-between text-xs text-gray-500">
+                      <div className="flex justify-between text-lg text-gray-500">
                         <span>
                           Delivery
                         </span>
@@ -2458,6 +2351,7 @@ const LandingPage = () => {
                             0)
                       }
                       className="
+                      cursor-pointer
                         group
                         mt-5
                         w-full
@@ -2526,6 +2420,41 @@ const LandingPage = () => {
                   </form>
                 </div>
               </div>
+            </div>
+          </div>
+        </section>
+
+
+         {/* ===================================================
+            TRUST STRIP
+        =================================================== */}
+
+        <section className="border-y border-black/[.05] bg-white/60">
+          <div className="max-w-6xl mx-auto px-5 sm:px-8 py-7">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+              <TrustItem
+                icon={<FiShield />}
+                title="Secure Order"
+                text="Your information is protected"
+              />
+
+              <TrustItem
+                icon={<FiTruck />}
+                title="Fast Delivery"
+                text="Reliable delivery service"
+              />
+
+              <TrustItem
+                icon={<FiCheck />}
+                title="Cash on Delivery"
+                text="Pay when you receive"
+              />
+
+              <TrustItem
+                icon={<FiStar />}
+                title="Premium Quality"
+                text="Carefully selected products"
+              />
             </div>
           </div>
         </section>
