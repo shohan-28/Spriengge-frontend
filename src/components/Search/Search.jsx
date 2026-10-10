@@ -23,7 +23,7 @@ const Search = () => {
     <div className="relative w-full max-w-md">
       {/* Search Input */}
       <div className="flex items-center bg-white border border-gray-200 rounded-full px-2  py-2 shadow-sm">
-        <FiSearch className="text-gray-500 text-3xl" />
+        <FiSearch className="text-gray-500 text-xl lg:text-3xl" />
 
         <input
           type="text"

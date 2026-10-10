@@ -21,14 +21,14 @@ const Navbar = () => {
   return (
     <div className="bg-transparent w-[90%] mx-auto">
       <div className="flex justify-between py-4 rounded-l-3xl rounded-r-3xl">
-        <div className="">
+        <div className="pr-6">
           <img
             src="https://i.postimg.cc/RhqVgn94/Spriengge-logo-3.png"
             alt=""
             className="h-10 lg:h-13 w-full object-contain"
           />
         </div>
-        <div className="flex gap-10">
+        <div className="flex gap-2">
           {/* <div className="relative  sm:w-70 md:w-96 lg:w-[500px] xl:w-[600px] w-65 ">
             <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
 
