@@ -65,7 +65,7 @@ const About = () => {
 
               {/* Facebook Button */}
               <a
-                href="https://www.facebook.com/spriengge.shop"
+                href="https://www.facebook.com/spriengge.shop1"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 px-6 py-3.5 rounded-xl bg-white border border-gray-200 text-gray-800 font-semibold hover:border-blue-500 hover:text-blue-600 hover:shadow-lg transition duration-300"

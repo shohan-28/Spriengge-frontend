@@ -6,7 +6,7 @@ const NavbarLink = () => {
     { name: "Home", path: "/" },
     { name: "Products", path: "/Products" },
     { name: "About", path: "/About" },
-    { name: "Services", path: "/Services" },
+    // { name: "Services", path: "/Services" },
     { name: "Contact", path: "/Contact" },
   ];
 

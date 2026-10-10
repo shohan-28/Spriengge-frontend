@@ -38,7 +38,7 @@ const BASE_API_URL = API_URL
 ========================================================= */
 
 const SUPPORT = {
-  facebook: "https://www.facebook.com/spriengge.shop",
+  facebook: "https://www.facebook.com/spriengge.shop1",
   mobile: "01341783631",
   whatsapp: "01341783631",
 };
